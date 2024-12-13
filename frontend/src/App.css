@@ -1,0 +1,17 @@
+.tab {
+    width: 100%;
+    background-color: rgb(255, 255, 255);
+    border: 1px solid black;
+    padding: 10px;
+    margin: 10px;
+    cursor: pointer;
+    border-radius: 10px 10px 10px 10px;
+}   
+
+.tab:hover {
+    background-color: #e1e1e1;
+}
+/* .tab-active {
+    
+} */
+
