@@ -1,5 +1,6 @@
-import { Tab } from "../types";
-import { SelectTorrentFile, SelectAnyFile, ReadFileToBytes, UnmarshalTorrent } from "../../wailsjs/go/main/App";
+import "./FileSelect.css";
+import { Tab } from "../../types";
+import { SelectTorrentFile, SelectAnyFile, ReadFileToBytes, UnmarshalTorrent } from "../../../wailsjs/go/main/App";
 
 export default function FileSelect({ tab }: { tab: Tab }) {
 
@@ -17,7 +18,7 @@ export default function FileSelect({ tab }: { tab: Tab }) {
 
     return (
         <div>
-            <button onClick={() => handleFileSelect()}>Select File</button>
+            <button className="button-1" onClick={() => handleFileSelect()}>Select File</button>
         </div>
     )
 }

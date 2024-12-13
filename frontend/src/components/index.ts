@@ -1,1 +1,1 @@
-export {default as FileSelect} from "./FileSelect"
+export {default as FileSelect} from "./FileSelect/FileSelect"
