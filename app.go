@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	// "fmt"
 
 	"bittorrent/backend"
 )
@@ -46,5 +45,9 @@ func (a *App) UnmarshalTorrent(data []byte) (interface{}, error) {
 // SendTrackerRequest sends a GET request to the tracker's announce URL
 func (a *App) SendTrackerRequest(torrent interface{}) ([]byte, error) {
 	return backend.SendTrackerRequest(torrent)
+}
+
+func (a *App) Dothething(data []byte) ([]byte, error) {
+	return backend.Dothething(data)
 }
 
