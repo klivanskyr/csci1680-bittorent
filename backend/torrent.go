@@ -3,6 +3,7 @@ package backend
 import (
 	"bytes"
 	"crypto/sha1"
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"io"
@@ -142,14 +143,17 @@ func decodeDict(r *bytes.Reader) (map[string]interface{}, error) {
 	return dict, nil
 }
 
+
+
 // calculateInfoHash computes the SHA-1 hash of the Bencoded "info" dictionary.
 func calculateInfoHash(torrent interface{}) ([]byte, error) {
+	fmt.Println("Calculating info hash... 1")
 	// Ensure the torrent is a dictionary
 	torrentMap, ok := torrent.(map[string]interface{})
 	if !ok {
 		return nil, fmt.Errorf("invalid torrent format: expected a dictionary")
 	}
-
+	fmt.Println("Calculating info hash... 2")
 	// Extract the "info" dictionary
 	info, ok := torrentMap["info"]
 	if !ok {
@@ -157,12 +161,19 @@ func calculateInfoHash(torrent interface{}) ([]byte, error) {
 	}
 
 	// Encode the "info" dictionary into Bencode
+	fmt.Println("Calculating info hash... 3")
+	// Print the type of info fields
+	for key, value := range info.(map[string]interface{}) {
+		fmt.Println(key, reflect.TypeOf(value))	
+	}
+
 	encodedInfo, err := Encode(info)
 	if err != nil {
 		return nil, fmt.Errorf("failed to Bencode 'info' dictionary: %v", err)
 	}
 
 	// Compute the SHA-1 hash of the encoded "info" dictionary
+	fmt.Println("Calculating info hash... 4")
 	hash := sha1.Sum(encodedInfo)
 	return hash[:], nil
 }
@@ -171,6 +182,8 @@ func calculateInfoHash(torrent interface{}) ([]byte, error) {
 // If you already have an Encode function, use that instead.
 func Encode(data interface{}) ([]byte, error) {
 	switch v := data.(type) {
+	case float64: //For some reason piece length is float64 so we need to convert it to int
+		return []byte(fmt.Sprintf("i%de", int(v))), nil
 	case int:
 		return []byte(fmt.Sprintf("i%de", v)), nil
 	case string:
@@ -213,28 +226,58 @@ func Encode(data interface{}) ([]byte, error) {
 	}
 }
 
-// GeneratePeerID generates a 20-byte peer ID
-func GeneratePeerID() string {
-	randomBytes := make([]byte, 20)
-	return string(randomBytes)
+func generatePeerID() string {
+	const clientPrefix = "-GO0001-" // Go client
+
+	randomBytes := make([]byte, 12)
+	_, err := rand.Read(randomBytes)
+	if err != nil {
+		panic("Failed to generate random bytes for peer_id")
+	}
+
+	return clientPrefix + string(randomBytes)
 }
 
 // SendTrackerRequest sends a GET request to the tracker's announce URL.
-func SendTrackerRequest(torrent interface{}, peerId string) ([]byte, error) {
-	if len(peerId) != 20 {
-		return nil, fmt.Errorf("peer ID must be 20 bytes long")
-	}
-
+func SendTrackerRequest(torrent interface{}) ([]byte, error) {
+	fmt.Println("Sending tracker request... 1")
 	announce, ok := torrent.(map[string]interface{})["announce"].(string)
 	if !ok {
 		return nil, fmt.Errorf("announce URL not found in torrent file")
 	}
 
+	// Announce can be either UDP or HTTP
+	// We are going to ignore announce list for now
+	var trackerType string
+	if announce[:4] == "http" {
+		trackerType = "http"
+	} else if announce[:3] == "udp" {
+		trackerType = "udp"
+	} else {
+		return nil, fmt.Errorf("unsupported tracker protocol")
+	}
+
+	if trackerType == "http" {
+		peerId := generatePeerID()
+		return sendHTTPTrackerRequest(torrent, peerId, announce)
+	} else if trackerType == "udp" {
+		return nil, fmt.Errorf("unsupported tracker protocol UDP")
+	} else {
+		return nil, fmt.Errorf("unsupported tracker protocol OTHER")
+	}
+}
+
+func sendHTTPTrackerRequest(torrent interface{}, peerId string, announce string) ([]byte, error) {
+	fmt.Println("Sending HTTP tracker request... 1")
+
 	infoHash, err := calculateInfoHash(torrent)
+	fmt.Println("\n", infoHash)
+	fmt.Printf("Hex info_hash: %x\n", infoHash)
 	if err != nil {
 		return nil, fmt.Errorf("failed to calculate info hash: %v", err)
 	}
 
+	fmt.Println("Sending HTTP tracker request... 2")
 	// URL-encode the info hash
 	infoHashEncoded := url.QueryEscape(string(infoHash))
 
@@ -249,6 +292,9 @@ func SendTrackerRequest(torrent interface{}, peerId string) ([]byte, error) {
 	params.Add("compact", "1")
 
 	requestURL := fmt.Sprintf("%s?%s", announce, params.Encode())
+
+	fmt.Println("Sending HTTP tracker request... 3")
+	fmt.Println(requestURL)
 
 	client := http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Get(requestURL)

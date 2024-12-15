@@ -1,6 +1,6 @@
 module bittorrent
 
-go 1.21
+go 1.21.4
 
 toolchain go1.23.4
 
