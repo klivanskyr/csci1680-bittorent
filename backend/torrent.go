@@ -4,11 +4,12 @@ import (
 	"bytes"
 	"crypto/rand"
 	"crypto/sha1"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
-	"reflect"
+	"os"
 
 	// "reflect"
 	"time"
@@ -16,20 +17,54 @@ import (
 	"github.com/zeebo/bencode"
 )
 
-func Dothething(data []byte) ([]byte, error) {
-	torrent, err := UnmarshalTorrent(data)
+// exportTorrentToFile exports the decoded torrent structure to a JSON file.
+func exportTorrentToFile(torrent map[string]interface{}, filename string) error {
+	file, err := os.Create(filename)
 	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal torrent: %v", err)
+		return err
+	}
+	defer file.Close()
+
+	// Convert the torrent structure to pretty-printed JSON
+	encodedJSON, err := json.MarshalIndent(torrent, "", "  ")
+	if err != nil {
+		return err
 	}
 
-	trackerResponse, err := SendTrackerRequest(torrent)
-	if err != nil {
-		return nil, fmt.Errorf("failed to send tracker request: %v", err)
-	}
-
-	return trackerResponse, nil
+	_, err = file.Write(encodedJSON)
+	return err
 }
 
+// Take in a whole torrent file and return the hashed info dictionary
+func HashInfo(data []byte) ([]byte, error) {
+	var torrent map[string]interface{}
+    err := bencode.NewDecoder(bytes.NewReader(data)).Decode(&torrent)
+    if err != nil {
+        return nil, fmt.Errorf("failed to decode torrent file: %v", err)
+    }
+
+	// Export the decoded torrent structure to a JSON file for inspection
+	err = exportTorrentToFile(torrent, "torrent_structure.json")
+	if err != nil {
+		return nil, fmt.Errorf("failed to export torrent structure: %v", err)
+	}
+	
+
+	info, ok := torrent["info"].(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("info not found in torrent file")
+	}
+
+	// Encode the info dictionary to calculate the info hash
+	var buf bytes.Buffer
+	encoder := bencode.NewEncoder(&buf)
+	if err := encoder.Encode(info); err != nil {
+		return nil, fmt.Errorf("failed to encode info dictionary: %v", err)
+	}
+
+	hash := sha1.Sum(buf.Bytes())
+	return hash[:], nil
+}
 
 // UnmarshalTorrent decodes Bencoded data into Go native types.
 func UnmarshalTorrent(data []byte) (interface{}, error) {
@@ -61,30 +96,12 @@ func calculateInfoHash(torrent interface{}) ([]byte, error) {
 		return nil, fmt.Errorf("'info' dictionary not found or has incorrect type in torrent")
 	}
 
-	// Fix types in the "info" dictionary
-	if length, ok := info["length"].(float64); ok {
-		info["length"] = int64(length)
-	}
-
-	if pieceLength, ok := info["piece length"].(float64); ok {
-		info["piece length"] = int64(pieceLength)
-	}
-
-	if private, ok := info["private"].(float64); ok {
-		info["private"] = int64(private)
-	}
-
 	// Initialize the writer as a bytes.Buffer
 	var buf bytes.Buffer
 	encoder := bencode.NewEncoder(&buf)
 
 	fmt.Println("Calculating info hash... 3")
 	// Encode the "info" dictionary into Bencode
-	// Print all the keys of info and the values types
-	for key, value := range info {
-		fmt.Println(key, reflect.TypeOf(value))
-	}
-
 	if err := encoder.Encode(info); err != nil {
 		fmt.Println("Calculating info hash... 3.1")
 		return nil, fmt.Errorf("failed to encode 'info' dictionary: %v", err)

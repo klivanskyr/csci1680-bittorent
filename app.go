@@ -47,7 +47,7 @@ func (a *App) SendTrackerRequest(torrent interface{}) ([]byte, error) {
 	return backend.SendTrackerRequest(torrent)
 }
 
-func (a *App) Dothething(data []byte) ([]byte, error) {
-	return backend.Dothething(data)
+func (a *App) HashInfo(data []byte) ([]byte, error) {
+	return backend.HashInfo(data)
 }
 
