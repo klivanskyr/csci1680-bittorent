@@ -72,7 +72,7 @@ func SendTrackerRequest(torrent interface{}, infoHash string) ([]byte, error) {
 
 	if trackerType == "http" {
 		peerId := generatePeerID()
-		return sendHTTPTrackerRequest(torrent, peerId, announce, infoHash)
+		return sendHTTPTrackerRequest(peerId, announce, infoHash)
 	} else if trackerType == "udp" {
 		return nil, fmt.Errorf("unsupported tracker protocol UDP")
 	} else {
@@ -80,13 +80,8 @@ func SendTrackerRequest(torrent interface{}, infoHash string) ([]byte, error) {
 	}
 }
 
-func sendHTTPTrackerRequest(torrent interface{}, peerId string, announce string, infoHash string) ([]byte, error) {
+func sendHTTPTrackerRequest(peerId string, announce string, infoHash string) ([]byte, error) {
 	fmt.Println("Sending HTTP tracker request... 1")
-
-	fmt.Println("\n", infoHash)
-	fmt.Printf("Hex info_hash: %x\n", infoHash)
-
-	fmt.Println("Sending HTTP tracker request... 2")
 
 	// Construct the request parameters
 	params := url.Values{}
@@ -98,18 +93,32 @@ func sendHTTPTrackerRequest(torrent interface{}, peerId string, announce string,
 	params.Add("left", "0") // Assuming download hasn't started yet
 	params.Add("compact", "1")
 
+	// Construct the full request URL
 	requestURL := fmt.Sprintf("%s?%s", announce, params.Encode())
 
-	fmt.Println("Sending HTTP tracker request... 3")
-	fmt.Println(requestURL)
+	fmt.Println("Sending HTTP tracker request... 2")
+	fmt.Println("Request URL:", requestURL)
 
+	// Create a new HTTP request
+	req, err := http.NewRequest("GET", requestURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("error creating HTTP request: %v", err)
+	}
+
+	// Set a BitTorrent-compatible User-Agent
+	req.Header.Set("User-Agent", "BitTorrent/7.10.5")
+
+	// Create an HTTP client with a timeout
 	client := http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Get(requestURL)
+
+	// Send the request
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("error sending tracker request: %v", err)
 	}
 	defer resp.Body.Close()
 
+	// Read the response body
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("error reading tracker response: %v", err)
