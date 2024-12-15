@@ -39,7 +39,17 @@ func (a *App) ReadFileToBytes(path string) ([]byte, error) {
 }
 
 // ConvertBencodeToJSON converts bencoded data to JSON
-func (a *App) UnmarshalTorrent(data []byte) (map[string]interface{}, error) {
+func (a *App) UnmarshalTorrent(data []byte) (interface{}, error) {
 	return backend.UnmarshalTorrent(data)
+}
+
+// GeneratePeerID generates a 20-byte peer ID
+func (a *App) GeneratePeerID() string {
+	return backend.GeneratePeerID()
+}
+
+// SendTrackerRequest sends a GET request to the tracker's announce URL
+func (a *App) SendTrackerRequest(torrent interface{}, peerID string) ([]byte, error) {
+	return backend.SendTrackerRequest(torrent, peerID)
 }
 
