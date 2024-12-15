@@ -1,6 +1,6 @@
 import "./FileSelect.css";
 import { Tab } from "../../types";
-import { ReadFileToBytes, SelectTorrentFile, HashInfo } from "../../../wailsjs/go/main/App";
+import { ReadFileToBytes, SelectTorrentFile, HashInfo, UnmarshalTorrent, SelectAnyFile, SendTrackerRequest } from "../../../wailsjs/go/main/App";
 
 export default function FileSelect({ tab }: { tab: Tab }) {
 
@@ -9,19 +9,18 @@ export default function FileSelect({ tab }: { tab: Tab }) {
             // Parse torrent file
             const file = await SelectTorrentFile();
             const bytes = await ReadFileToBytes(file.Path);
-            const result = await HashInfo(bytes);
-            console.log(result);
+            const torrent = await UnmarshalTorrent(bytes);
 
-            // const torrent = await UnmarshalTorrent(bytes);
-            // console.log(torrent);
+            const hash = await HashInfo(file.Path); // I know this is ugly but ill refactor later hopefully
+            console.log("hash:", hash);
 
-            // // Start GET requests to tracker server
-            // const response = await SendTrackerRequest(torrent);
-            // console.log("response:", response);
+            // Start GET requests to tracker server
+            const response = await SendTrackerRequest(torrent, hash);
+            console.log("response:", response);
 
-        // } else {
-        //     const file = await SelectAnyFile();
-        //     console.log(file);
+        } else {
+            const file = await SelectAnyFile();
+            console.log(file);
         }
     }
 

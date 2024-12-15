@@ -3,68 +3,15 @@ package backend
 import (
 	"bytes"
 	"crypto/rand"
-	"crypto/sha1"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
-	"os"
-
-	// "reflect"
 	"time"
 
 	"github.com/zeebo/bencode"
+	"github.com/anacrolix/torrent/metainfo"
 )
-
-// exportTorrentToFile exports the decoded torrent structure to a JSON file.
-func exportTorrentToFile(torrent map[string]interface{}, filename string) error {
-	file, err := os.Create(filename)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	// Convert the torrent structure to pretty-printed JSON
-	encodedJSON, err := json.MarshalIndent(torrent, "", "  ")
-	if err != nil {
-		return err
-	}
-
-	_, err = file.Write(encodedJSON)
-	return err
-}
-
-// Take in a whole torrent file and return the hashed info dictionary
-func HashInfo(data []byte) ([]byte, error) {
-	var torrent map[string]interface{}
-    err := bencode.NewDecoder(bytes.NewReader(data)).Decode(&torrent)
-    if err != nil {
-        return nil, fmt.Errorf("failed to decode torrent file: %v", err)
-    }
-
-	// Export the decoded torrent structure to a JSON file for inspection
-	err = exportTorrentToFile(torrent, "torrent_structure.json")
-	if err != nil {
-		return nil, fmt.Errorf("failed to export torrent structure: %v", err)
-	}
-	
-
-	info, ok := torrent["info"].(map[string]interface{})
-	if !ok {
-		return nil, fmt.Errorf("info not found in torrent file")
-	}
-
-	// Encode the info dictionary to calculate the info hash
-	var buf bytes.Buffer
-	encoder := bencode.NewEncoder(&buf)
-	if err := encoder.Encode(info); err != nil {
-		return nil, fmt.Errorf("failed to encode info dictionary: %v", err)
-	}
-
-	hash := sha1.Sum(buf.Bytes())
-	return hash[:], nil
-}
 
 // UnmarshalTorrent decodes Bencoded data into Go native types.
 func UnmarshalTorrent(data []byte) (interface{}, error) {
@@ -78,41 +25,17 @@ func UnmarshalTorrent(data []byte) (interface{}, error) {
     return torrent, nil
 }
 
-// calculateInfoHash computes the SHA-1 hash of the Bencoded "info" dictionary.
-func calculateInfoHash(torrent interface{}) ([]byte, error) {
-	fmt.Println("Calculating info hash... 1")
-
-	// Ensure the torrent is a dictionary
-	torrentMap, ok := torrent.(map[string]interface{})
-	if !ok {
-		return nil, fmt.Errorf("invalid torrent format: expected a dictionary")
+// Take in a whole torrent file and return the hashed info dictionary
+func HashInfo(torrentPath string) (string, error) {
+	mi, err := metainfo.LoadFromFile(torrentPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to load torrent file: %v", err)
 	}
 
-	fmt.Println("Calculating info hash... 2")
+	info := mi.HashInfoBytes().HexString()
 
-	// Extract the "info" dictionary
-	info, ok := torrentMap["info"].(map[string]interface{})
-	if !ok {
-		return nil, fmt.Errorf("'info' dictionary not found or has incorrect type in torrent")
-	}
-
-	// Initialize the writer as a bytes.Buffer
-	var buf bytes.Buffer
-	encoder := bencode.NewEncoder(&buf)
-
-	fmt.Println("Calculating info hash... 3")
-	// Encode the "info" dictionary into Bencode
-	if err := encoder.Encode(info); err != nil {
-		fmt.Println("Calculating info hash... 3.1")
-		return nil, fmt.Errorf("failed to encode 'info' dictionary: %v", err)
-	}
-
-	// Compute the SHA-1 hash of the encoded "info" dictionary
-	fmt.Println("Calculating info hash... 4")
-	hash := sha1.Sum(buf.Bytes())
-	fmt.Println("Calculating info hash... 5")
-
-	return hash[:], nil
+	fmt.Println("Hashed info dictionary: ", info)
+	return info, nil
 }
 
 func generatePeerID() string {
@@ -124,11 +47,12 @@ func generatePeerID() string {
 		panic("Failed to generate random bytes for peer_id")
 	}
 
-	return clientPrefix + string(randomBytes)
+	// Make peer_id hexadecimal
+	return clientPrefix + fmt.Sprintf("%x", randomBytes)
 }
 
 // SendTrackerRequest sends a GET request to the tracker's announce URL.
-func SendTrackerRequest(torrent interface{}) ([]byte, error) {
+func SendTrackerRequest(torrent interface{}, infoHash string) ([]byte, error) {
 	fmt.Println("Sending tracker request... 1")
 	announce, ok := torrent.(map[string]interface{})["announce"].(string)
 	if !ok {
@@ -148,7 +72,7 @@ func SendTrackerRequest(torrent interface{}) ([]byte, error) {
 
 	if trackerType == "http" {
 		peerId := generatePeerID()
-		return sendHTTPTrackerRequest(torrent, peerId, announce)
+		return sendHTTPTrackerRequest(torrent, peerId, announce, infoHash)
 	} else if trackerType == "udp" {
 		return nil, fmt.Errorf("unsupported tracker protocol UDP")
 	} else {
@@ -156,23 +80,17 @@ func SendTrackerRequest(torrent interface{}) ([]byte, error) {
 	}
 }
 
-func sendHTTPTrackerRequest(torrent interface{}, peerId string, announce string) ([]byte, error) {
+func sendHTTPTrackerRequest(torrent interface{}, peerId string, announce string, infoHash string) ([]byte, error) {
 	fmt.Println("Sending HTTP tracker request... 1")
 
-	infoHash, err := calculateInfoHash(torrent)
 	fmt.Println("\n", infoHash)
 	fmt.Printf("Hex info_hash: %x\n", infoHash)
-	if err != nil {
-		return nil, fmt.Errorf("failed to calculate info hash: %v", err)
-	}
 
 	fmt.Println("Sending HTTP tracker request... 2")
-	// URL-encode the info hash
-	infoHashEncoded := url.QueryEscape(string(infoHash))
 
 	// Construct the request parameters
 	params := url.Values{}
-	params.Add("info_hash", infoHashEncoded)
+	params.Add("info_hash", infoHash)
 	params.Add("peer_id", peerId)
 	params.Add("port", "6881")
 	params.Add("uploaded", "0")

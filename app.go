@@ -43,11 +43,11 @@ func (a *App) UnmarshalTorrent(data []byte) (interface{}, error) {
 }
 
 // SendTrackerRequest sends a GET request to the tracker's announce URL
-func (a *App) SendTrackerRequest(torrent interface{}) ([]byte, error) {
-	return backend.SendTrackerRequest(torrent)
+func (a *App) SendTrackerRequest(torrent interface{}, infoHash string) ([]byte, error) {
+	return backend.SendTrackerRequest(torrent, infoHash)
 }
 
-func (a *App) HashInfo(data []byte) ([]byte, error) {
-	return backend.HashInfo(data)
+func (a *App) HashInfo(torrentPath string) (string, error) {
+	return backend.HashInfo(torrentPath)
 }
 

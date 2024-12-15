@@ -18,8 +18,8 @@ export function SelectTorrentFile() {
   return window['go']['main']['App']['SelectTorrentFile']();
 }
 
-export function SendTrackerRequest(arg1) {
-  return window['go']['main']['App']['SendTrackerRequest'](arg1);
+export function SendTrackerRequest(arg1, arg2) {
+  return window['go']['main']['App']['SendTrackerRequest'](arg1, arg2);
 }
 
 export function UnmarshalTorrent(arg1) {
