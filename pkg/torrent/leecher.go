@@ -153,7 +153,7 @@ func sendRequest(conn net.Conn, pieceIndex uint32) error {
 	// Set the piece index, begin, and length
 	pieceIndexBytes := uint32ToBytes(pieceIndex)
 	copy(message.Payload[0:4], pieceIndexBytes)
-	copy(message.Payload[4:8], uint32ToBytes(0))            // begin
+	copy(message.Payload[4:8], uint32ToBytes(0))           // begin
 	copy(message.Payload[8:12], uint32ToBytes(PIECE_SIZE)) // length
 
 	// Marshal the message
