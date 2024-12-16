@@ -11,6 +11,8 @@ import (
 	"github.com/zeebo/bencode"
 )
 
+const TIMEOUT = 2 * time.Minute
+
 // Announce is the message sent by the client to the tracking server to announce its presence.
 type Announce struct {
 	InfoHash string `bencode:"info_hash"` // The info_hash of the file the client is downloading
@@ -81,9 +83,14 @@ func handleAnnounce(tracker *Tracker, announce *Announce) {
 	switch announce.Event {
 	case STARTED:
 		// Add the peer to the list of peers
-		peers = append(peers, Peer{announce.PeerID, false, announce.IP, announce.Port, time.Now()})
+		peers = append(peers, Peer{announce.PeerID, false, announce.IP, announce.Port, time.Now()}) // This allows repeats but doesn't matter
 		// Return a list of all of the seeders
-		for _, peer := range peers {
+		for i, peer := range peers {
+			if peer.LastAnnounce.Before(time.Now().Add(-TIMEOUT)) {
+				// Remove the peer from the list of peers
+				peers = append(peers[:i], peers[i+1:]...)
+				continue
+			}
 			if peer.Seeder {
 				seeders = append(seeders, peer)
 			}
@@ -91,13 +98,23 @@ func handleAnnounce(tracker *Tracker, announce *Announce) {
 	case STOPPED:
 		// Remove the peer from the list of peers
 		for i, peer := range peers {
+			if peer.LastAnnounce.Before(time.Now().Add(-TIMEOUT)) {
+				// Remove the peer from the list of peers
+				peers = append(peers[:i], peers[i+1:]...)
+				continue
+			}
 			if peer.PeerID == announce.PeerID {
 				peers = append(peers[:i], peers[i+1:]...)
 				break
 			}
 		}
 		// Return a list of all of the seeders
-		for _, peer := range peers {
+		for i, peer := range peers {
+			if peer.LastAnnounce.Before(time.Now().Add(-TIMEOUT)) {
+				// Remove the peer from the list of peers
+				peers = append(peers[:i], peers[i+1:]...)
+				continue
+			}
 			if peer.Seeder {
 				seeders = append(seeders, peer)
 			}
