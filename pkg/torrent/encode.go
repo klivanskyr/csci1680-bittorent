@@ -12,21 +12,9 @@ import (
 	"github.com/zeebo/bencode"
 )
 
-type Torrent struct {
-	Announce string      `bencode:"announce"`
-	Info     TorrentInfo `bencode:"info"`
-}
-
-type TorrentInfo struct {
-	Name        string `bencode:"name"`
-	Length      int64  `bencode:"length"`
-	PieceLength int    `bencode:"piece length"`
-	Pieces      []byte `bencode:"pieces"` // Use []byte for raw binary data
-}
-
 const PIECE_SIZE = 512 * 1024 // 512 KB
 
-func CreateTorrentFile(seederStack *SeederStack, filePath string) ([]byte, error) {
+func CreateTorrentFile(seederStack *SeederStack, filePath string, peerID string) ([]byte, error) {
 	// Open the file
 	file, err := os.Open(filePath)
 	if err != nil {
@@ -55,7 +43,7 @@ func CreateTorrentFile(seederStack *SeederStack, filePath string) ([]byte, error
 
 	// Define the torrent metadata
 	torrent := Torrent{
-		Announce: "127.0.0.1:8080", // This should be the URL of the tracker server
+		Announce: "http://127.0.0.1:8080/announce", // This should be the URL of the tracker server
 		Info: TorrentInfo{
 			Name:        fileName,
 			Length:      fileInfo.Size(),
@@ -76,16 +64,23 @@ func CreateTorrentFile(seederStack *SeederStack, filePath string) ([]byte, error
 	seederPort := seederStack.port
 	seederStack.mtx.Unlock()
 
+	hashInfo, err := torrent.HashInfo()
+	if err != nil {
+		return nil, err
+	}
+
+	fmt.Println("Hash Info: ", hashInfo)
+
 	err = seederStack.AddSeeder(Seeder{
 		addr:              &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: seederPort}, //Right now just local host
-		infoHash:          []byte("10101010"), //TEMP HEX HASH 
-		peerID:            []byte("12345678901234567890"), //TEMP PEER ID
+		infoHash:          hashInfo,
+		peerID:            []byte(peerID),
 		filepath:          filePath,
 		connectedLeechers: []Leecher{},
 	})
 	if err != nil {
 		/* This error means that if we couldn't upload to the tracker server,
-			we should not give you the torrent file */
+		we should not give you the torrent file */
 		fmt.Println("Error adding seeder to stack: ", err)
 		return nil, err
 	}

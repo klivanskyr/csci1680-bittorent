@@ -1,6 +1,8 @@
-package backend
+package client
 
 import (
+	"bittorrent/pkg/torrent"
+	"bittorrent/pkg/trackingserver"
 	"bytes"
 	"encoding/binary"
 	"errors"
@@ -129,15 +131,15 @@ func parsePiece(message []byte) (uint32, uint32, []byte) {
 	return index, begin, block
 }	
 
-func downloadFromSeeder(address string, infoHash []byte, peerId string, totalPieces uint32) error {
+func downloadFromSeeder(peer trackingserver.Peer, infoHash []byte, totalPieces uint32) error {
 	// Connect to the seeder
-	conn, err := net.Dial("tcp", address)
+	conn, err := net.Dial("tcp", fmt.Sprintf("%s:%d", peer.IP, peer.Port))
 	if err != nil { return err }
 	defer conn.Close()
 
 	// Send the handshake message
 	fmt.Println("Sending handshake to seeder...")
-	err = sendHandshakeToSeeder(conn, infoHash, peerId)
+	err = sendHandshakeToSeeder(conn, infoHash, peer.PeerID)
 	if err != nil { return err }
 
 	// Receive the handshake message
@@ -199,7 +201,12 @@ func saveBlock(file *os.File, index uint32, begin uint32, block []byte) error {
 	return nil
 }
 
-func DownloadFromSeeders(peers []string, infoHash []byte, peerId string, totalPieces uint32) error {
+func DownloadFromSeeders(peers []trackingserver.Peer, torrent torrent.Torrent, totalPieces uint32) error {
 	// If there are multiple peers, download from the first one for simplicity
-	return downloadFromSeeder(peers[0], infoHash, peerId, totalPieces)
+	infoHash, err := torrent.HashInfo()
+	if err != nil {
+		return fmt.Errorf("error hashing info dictionary: %v", err)
+	}
+
+	return downloadFromSeeder(peers[0], infoHash, totalPieces)
 }

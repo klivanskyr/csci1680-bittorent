@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 
 	// "strings"
 	"sync"
@@ -55,7 +56,7 @@ func (s *SeederStack) AddSeeder(seeder Seeder) error {
 	announce := trackingserver.AnnounceRequest{
 		InfoHash: seeder.infoHash,
 		PeerID:   seeder.peerID,
-		IP:       seeder.addr.String(),
+		IP:       strings.Split(seeder.addr.String(), ":")[0], // Only want the IP address
 		Port:     s.port, 
 		Event:    trackingserver.STARTED,
 	}

@@ -6,8 +6,8 @@ export function CreateTorrentFile(arg1) {
   return window['go']['main']['App']['CreateTorrentFile'](arg1);
 }
 
-export function DownloadFromSeeders(arg1, arg2, arg3, arg4) {
-  return window['go']['main']['App']['DownloadFromSeeders'](arg1, arg2, arg3, arg4);
+export function DownloadFromSeeders(arg1, arg2, arg3) {
+  return window['go']['main']['App']['DownloadFromSeeders'](arg1, arg2, arg3);
 }
 
 export function GeneratePeerID() {
@@ -34,8 +34,8 @@ export function SelectTorrentFile() {
   return window['go']['main']['App']['SelectTorrentFile']();
 }
 
-export function SendTrackerRequest(arg1, arg2, arg3) {
-  return window['go']['main']['App']['SendTrackerRequest'](arg1, arg2, arg3);
+export function SendTrackerRequest(arg1, arg2) {
+  return window['go']['main']['App']['SendTrackerRequest'](arg1, arg2);
 }
 
 export function UnmarshalTorrent(arg1) {
