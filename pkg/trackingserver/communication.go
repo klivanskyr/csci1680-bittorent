@@ -1,10 +1,10 @@
 package trackingserver
 
 import (
-	"bytes"
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -55,28 +55,70 @@ func NewTracker() *Tracker {
 
 // Listen is a function that listens for Announce messages from clients.
 func (tracker *Tracker) Listen() {
-	http.HandleFunc("/announce", func(w http.ResponseWriter, r *http.Request) {
-		// Parse the Announce message from the request body
-		var announce Announce
-		err := bencode.NewDecoder(r.Body).Decode(&announce)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
+    http.HandleFunc("/announce", func(w http.ResponseWriter, r *http.Request) {
+        // Ensure it's a GET request
+        if r.Method != http.MethodGet {
+            http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
+            return
+        }
 
-		// Handle the Announce message
-		handleAnnounce(tracker, &announce)
-	})
+        // Parse query parameters
+        infoHash := r.URL.Query().Get("info_hash")
+        peerID := r.URL.Query().Get("peer_id")
+        ip := strings.Split(r.RemoteAddr, ":")[0]
+        port := r.URL.Query().Get("port")
+        event := r.URL.Query().Get("event")
 
-	log.Fatal(http.ListenAndServe(":8080", nil))
+        // Validate required fields
+        if infoHash == "" || peerID == "" || port == "" {
+            http.Error(w, "Missing required parameters", http.StatusBadRequest)
+            return
+        }
+
+        // Convert port to integer
+        portInt := 0
+        _, err := fmt.Sscanf(port, "%d", &portInt)
+        if err != nil {
+            http.Error(w, "Invalid port number", http.StatusBadRequest)
+            return
+        }
+
+        // Convert event to integer (optional)
+        eventInt := STARTED
+        if event != "" {
+            _, err := fmt.Sscanf(event, "%d", &eventInt)
+            if err != nil {
+                http.Error(w, "Invalid event", http.StatusBadRequest)
+                return
+            }
+        }
+
+        // Create the Announce struct
+        announce := Announce{
+            InfoHash: infoHash,
+            PeerID:   peerID,
+            IP:       ip,
+            Port:     portInt,
+            Event:    eventInt,
+        }
+
+        // Handle the Announce message
+        handleAnnounce(w, tracker, &announce)
+    })
+
+    log.Fatal(http.ListenAndServe(":8080", nil))
 }
 
 // handleAnnounce is a function that handles an Announce message from a client.
-func handleAnnounce(tracker *Tracker, announce *Announce) {
+func handleAnnounce(w http.ResponseWriter, tracker *Tracker, announce *Announce) {
 	// Get the list of peers for the info_hash
 	tracker.mtx.Lock()
+	defer tracker.mtx.Unlock()
+
 	peers := tracker.peers[announce.InfoHash]
 	seeders := []Peer{}
+
+	fmt.Print("Received Announce Message from ", announce.IP, ":", announce.Port, "\n")
 
 	switch announce.Event {
 	case STARTED:
@@ -112,39 +154,28 @@ func handleAnnounce(tracker *Tracker, announce *Announce) {
 		}
 	}
 	tracker.peers[announce.InfoHash] = peers
-	tracker.mtx.Unlock()
 
 	// Send the list of seeders to the client
 	announceResponse := AnnounceResponse{seeders}
-	sendAnnounceResponse(&announceResponse, announce.IP, announce.Port)
+	sendAnnounceResponse(w, &announceResponse)
 }
 
-func sendAnnounceResponse(announceResponse *AnnounceResponse, ip string, port int) {
-	// Send the list of seeders to the client
+func sendAnnounceResponse(w http.ResponseWriter, announceResponse *AnnounceResponse) {
+	// Encode the announceResponse to bencode
 	data, err := bencode.EncodeBytes(announceResponse)
 	if err != nil {
+		http.Error(w, "Error encoding response", http.StatusInternalServerError)
 		log.Printf("Error marshalling announce response: %v", err)
 		return
 	}
 
-	url := fmt.Sprintf("https://%s:%d/announce", ip, port)
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(data))
+	// Set the response headers
+	w.Header().Set("Content-Type", "application/x-bittorrent")
+	w.WriteHeader(http.StatusOK)
+
+	// Write the response data
+	_, err = w.Write(data)
 	if err != nil {
-		log.Printf("Error creating HTTP request: %v", err)
-		return
-	}
-
-	req.Header.Set("Content-Type", "application/x-bittorrent")
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		log.Printf("Error sending HTTP request: %v", err)
-		return
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		log.Printf("Received non-OK response: %s", resp.Status)
+		log.Printf("Error writing response: %v", err)
 	}
 }
