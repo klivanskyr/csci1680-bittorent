@@ -13,8 +13,8 @@ export default function Sidebar({ tabs, children }: SidebarProps) {
     return (
         <div className="row">
             <div className="sidebar">
-                {tabs.map(tab => (
-                    <div className={`item ${currentTab === tab ? "active-item" : ""}`}>
+                {tabs.map((tab, i) => (
+                    <div key={i} className={`item ${currentTab === tab ? "active-item" : ""}`}>
                         <button 
                             className="item-button"
                             onClick={() => setCurrentTab(tab)}
