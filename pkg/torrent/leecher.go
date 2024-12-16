@@ -52,6 +52,11 @@ func downloadFromSeeder(peer trackingserver.Peer, torrent Torrent, bitfield []by
 	downloadedData := make([]byte, 0)
 
 	for pieceIndex := 0; pieceIndex < totalPieces; pieceIndex++ {
+		// Check if we already have the piece
+		if hasPiece(bitfield, pieceIndex) {
+			continue
+		}
+
 		// Send a request message for the piece
 		err = sendRequest(conn, uint32(pieceIndex))
 		if err != nil {
@@ -226,4 +231,10 @@ func uint32ToBytes(n uint32) []byte {
 	b := make([]byte, 4)
 	binary.BigEndian.PutUint32(b, n)
 	return b
+}
+
+func hasPiece(bitfield []byte, index int) bool {
+	byteIndex := index / 8
+	offset := index % 8
+	return bitfield[byteIndex]&(1<<(7-offset)) != 0
 }
