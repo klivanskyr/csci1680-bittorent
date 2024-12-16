@@ -77,3 +77,23 @@ func SelectAnyFile(ctx context.Context) (*FileInfo, error) {
 func ReadFileToBytes(path string) ([]byte, error) {
     return os.ReadFile(path)
 }
+
+func SaveFileFromBytes(ctx context.Context, data []byte, defaultFileName string, displayName string, pattern string) error {
+	// Open save file dialog
+	savePath, err := runtime.SaveFileDialog(ctx, runtime.SaveDialogOptions{
+		Title: defaultFileName,
+		Filters: []runtime.FileFilter{
+			{
+				DisplayName: displayName,
+				Pattern:     pattern,
+			},
+		},
+	})
+
+	if err != nil || savePath == "" {
+		return err
+	}
+
+	// Write the data to the selected path
+	return os.WriteFile(savePath, data, 0644)
+}

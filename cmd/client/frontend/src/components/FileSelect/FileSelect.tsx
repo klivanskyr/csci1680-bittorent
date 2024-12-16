@@ -1,8 +1,27 @@
 import "./FileSelect.css";
 import { Tab } from "../../types";
-import { ReadFileToBytes, SelectTorrentFile, HashInfo, UnmarshalTorrent, SelectAnyFile, SendTrackerRequest, DownloadFromSeeders, GeneratePeerID } from "../../../wailsjs/go/main/App";
+import { 
+    ReadFileToBytes, 
+    SelectTorrentFile, 
+    HashInfo, 
+    UnmarshalTorrent,
+    SelectAnyFile,
+    SendTrackerRequest, 
+    DownloadFromSeeders, 
+    GeneratePeerID,
+    CreateTorrentFile,
+    SaveFileFromBytes
+
+} from "../../../wailsjs/go/main/App";
+import { useState } from "react";
+
+type File = {
+    bytes: number[];
+    name: string;
+}
 
 export default function FileSelect({ tab }: { tab: Tab }) {
+    const [file, setFile] = useState<File | null>(null); // used for uploading
 
     const handleFileSelect = async () => {
         if (tab === "download") {
@@ -28,15 +47,24 @@ export default function FileSelect({ tab }: { tab: Tab }) {
             await DownloadFromSeeders(peers, infoHash, peerId, totalPieces);
 
 
-        } else {
+        } else { // tab === "upload"
             const file = await SelectAnyFile();
-            console.log(file);
+            const torrentBytes = await CreateTorrentFile(file.Path);
+            setFile({ bytes: torrentBytes, name: file.Name });
         }
     }
 
+    const handleDownload = async () => {
+        if (!file) return;
+        await SaveFileFromBytes(file.bytes, file.name, "Torrent Files", "*.torrent"); 
+    };
+
     return (
         <div>
-            <button className="button-1" onClick={() => handleFileSelect()}>Select File</button>
+            {(tab === "download" || !file) && <button className="button-1" onClick={() => handleFileSelect()}>Select File</button>}
+            {(tab === "upload" && file) &&
+                <button className="button-1 button-download" onClick={() => handleDownload()}>Download Torrent File</button>
+            }
         </div>
     )
 }

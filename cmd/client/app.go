@@ -4,11 +4,13 @@ import (
 	"context"
 
 	"bittorrent/cmd/client/backend"
+	"bittorrent/pkg/torrent"
 )
 
 // App struct
 type App struct {
 	ctx context.Context
+	seederStack *torrent.SeederStack
 }
 
 // NewApp creates a new App application struct
@@ -20,6 +22,10 @@ func NewApp() *App {
 // so we can call the runtime methods
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
+
+	// start seeder stack
+	a.seederStack = &torrent.SeederStack{}
+	go a.seederStack.Listen(6881, 10) // Start listening on port 6881 with 10 retries
 }
 
 // SelectTorrentFile opens a file dialog, allowing only .torrent files and returns the selected file path
@@ -57,4 +63,12 @@ func (a *App) DownloadFromSeeders(peers []string, infoHash []byte, peerId string
 
 func (a *App) GeneratePeerID() string {
 	return backend.GeneratePeerID()
+}
+
+func (a *App) CreateTorrentFile(filePath string) ([]byte, error) {
+	return torrent.CreateTorrentFile(a.seederStack, filePath)
+}
+
+func (a *App) SaveFileFromBytes(data []byte, defaultFileName string, displayName string, pattern string) error {
+	return backend.SaveFileFromBytes(a.ctx, data, defaultFileName, displayName, pattern)
 }

@@ -13,8 +13,8 @@ import (
 
 // Announce is the message sent by the client to the tracking server to announce its presence.
 type Announce struct {
-	InfoHash string `bencode:"info_hash"` // The info_hash of the file the client is downloading
-	PeerID   string `bencode:"peer_id"`   // The peer_id of the client
+	InfoHash string `bencode:"info_hash: hex"` // The info_hash of the file the client is downloading
+	PeerID   string `bencode:"peer_id: hex"`   // The peer_id of the client
 	IP       string `bencode:"ip"`        // The IP address of the client
 	Port     int    `bencode:"port"`      // The port the client is listening on
 	Event    int    `bencode:"event"`     // The event of the announce message
@@ -33,7 +33,7 @@ type AnnounceResponse struct {
 
 // Peer is a struct that represents a peer that has the file the client is downloading.
 type Peer struct {
-	PeerID       string    `bencode:"peer_id"`       // The peer_id of the peer
+	PeerID       string    `bencode:"peer_id: hex"`       // The peer_id of the peer
 	Seeder       bool      `bencode:"seeder"`        // Whether the peer has downloaded the file
 	IP           string    `bencode:"ip"`            // The IP address of the peer
 	Port         int       `bencode:"port"`          // The port the peer is listening on
@@ -53,60 +53,104 @@ func NewTracker() *Tracker {
 	}
 }
 
-// Listen is a function that listens for Announce messages from clients.
+/// Listen is a function that listens for Announce messages from clients.
 func (tracker *Tracker) Listen() {
-    http.HandleFunc("/announce", func(w http.ResponseWriter, r *http.Request) {
-        // Ensure it's a GET request
-        if r.Method != http.MethodGet {
-            http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
-            return
-        }
+	http.HandleFunc("/announce", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			handleAnnounceGET(w, r, tracker)
+		case http.MethodPost:
+			handleAnnouncePOST(w, r, tracker)
+		default:
+			http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
+		}
+	})
 
-        // Parse query parameters
-        infoHash := r.URL.Query().Get("info_hash")
-        peerID := r.URL.Query().Get("peer_id")
-        ip := strings.Split(r.RemoteAddr, ":")[0]
-        port := r.URL.Query().Get("port")
-        event := r.URL.Query().Get("event")
+	log.Fatal(http.ListenAndServe(":8080", nil))
+}
 
-        // Validate required fields
-        if infoHash == "" || peerID == "" || port == "" {
-            http.Error(w, "Missing required parameters", http.StatusBadRequest)
-            return
-        }
+// handleAnnouncePOST handles POST requests to the /announce endpoint.
+// Used when seeder wants to register itself with the tracker.
+func handleAnnouncePOST(w http.ResponseWriter, r *http.Request, tracker *Tracker) {
+	// Parse the bencoded request body
+	var announce Announce
+	err := bencode.NewDecoder(r.Body).Decode(&announce)
+	if err != nil {
+		http.Error(w, "Invalid bencoded payload", http.StatusBadRequest)
+		return
+	}
 
-        // Convert port to integer
-        portInt := 0
-        _, err := fmt.Sscanf(port, "%d", &portInt)
-        if err != nil {
-            http.Error(w, "Invalid port number", http.StatusBadRequest)
-            return
-        }
+	// Validate required fields
+	if announce.InfoHash == "" || announce.PeerID == "" || announce.Port == 0 {
+		http.Error(w, "Missing required fields", http.StatusBadRequest)
+		return
+	}
 
-        // Convert event to integer (optional)
-        eventInt := STARTED
-        if event != "" {
-            _, err := fmt.Sscanf(event, "%d", &eventInt)
-            if err != nil {
-                http.Error(w, "Invalid event", http.StatusBadRequest)
-                return
-            }
-        }
+	// Add the seeder to the tracker's list
+	tracker.mtx.Lock()
+	defer tracker.mtx.Unlock()
+	tracker.peers[announce.InfoHash] = append(tracker.peers[announce.InfoHash], Peer{
+		PeerID:       announce.PeerID,
+		Seeder:       true,
+		IP:           announce.IP,
+		Port:         announce.Port,
+		LastAnnounce: time.Now(),
+	})
+	tracker.mtx.Unlock()
 
-        // Create the Announce struct
-        announce := Announce{
-            InfoHash: infoHash,
-            PeerID:   peerID,
-            IP:       ip,
-            Port:     portInt,
-            Event:    eventInt,
-        }
+	// Respond with a bencoded confirmation message
+	response := map[string]string{"status": "Seeder added successfully"}
+	w.Header().Set("Content-Type", "application/x-bittorrent")
+	err = bencode.NewEncoder(w).Encode(response)
+	if err != nil {
+		log.Println("Error encoding response:", err)
+	}
+}
 
-        // Handle the Announce message
-        handleAnnounce(w, tracker, &announce)
-    })
+// handleAnnounceGET handles GET requests to the /announce endpoint.
+func handleAnnounceGET(w http.ResponseWriter, r *http.Request, tracker *Tracker) {
+	// Parse query parameters
+	infoHash := r.URL.Query().Get("info_hash")
+	peerID := r.URL.Query().Get("peer_id")
+	ip := strings.Split(r.RemoteAddr, ":")[0]
+	port := r.URL.Query().Get("port")
+	event := r.URL.Query().Get("event")
 
-    log.Fatal(http.ListenAndServe(":8080", nil))
+	// Validate required fields
+	if infoHash == "" || peerID == "" || port == "" {
+		http.Error(w, "Missing required parameters", http.StatusBadRequest)
+		return
+	}
+
+	// Convert port to integer
+	portInt := 0
+	_, err := fmt.Sscanf(port, "%d", &portInt)
+	if err != nil {
+		http.Error(w, "Invalid port number", http.StatusBadRequest)
+		return
+	}
+
+	// Convert event to integer (optional)
+	eventInt := STARTED
+	if event != "" {
+		_, err := fmt.Sscanf(event, "%d", &eventInt)
+		if err != nil {
+			http.Error(w, "Invalid event", http.StatusBadRequest)
+			return
+		}
+	}
+
+	// Create the Announce struct
+	announce := Announce{
+		InfoHash: infoHash,
+		PeerID:   peerID,
+		IP:       ip,
+		Port:     portInt,
+		Event:    eventInt,
+	}
+
+	// Handle the Announce message
+	handleAnnounce(w, tracker, &announce)
 }
 
 // handleAnnounce is a function that handles an Announce message from a client.

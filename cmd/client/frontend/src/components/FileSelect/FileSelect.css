@@ -1,0 +1,9 @@
+.button-download {
+    background-color: rgb(111, 176, 255);
+    color: white;
+    border: none;
+}
+
+.button-download:hover {
+    background-color: rgb(102, 168, 249);
+}

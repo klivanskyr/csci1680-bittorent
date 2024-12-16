@@ -2,16 +2,28 @@ package torrent
 
 import (
 	"bytes"
+	"encoding/hex"
+	"fmt"
 	"log"
 	"net"
+	"net/http"
 	"os"
+	"strconv"
+	"strings"
+	"sync"
+
+	"bittorrent/pkg/trackingserver"
+
+	"github.com/zeebo/bencode"
 )
 
+const TrackerAddr = "http://127.0.0.1:8080"
 // All the seeder needs to do is respond to requests for specific pieces of a file
 
 // Piece size is set to 512 but we should edit how we do this on this receiver side to accept different piece sized based on peer
 
 type Seeder struct {
+	addr              net.Addr
 	infoHash          []byte
 	peerID            []byte
 	connectedLeechers []Leecher
@@ -25,20 +37,91 @@ type Leecher struct {
 	tcpConn  net.Conn
 }
 
-type SeederStack []Seeder
+type SeederStack struct {
+	mtx     sync.Mutex
+	seeders []Seeder
+	port    int
+}
+
+func (s *SeederStack) AddSeeder(seeder Seeder) {
+	s.mtx.Lock()
+	s.seeders = append(s.seeders, seeder)
+	s.mtx.Unlock()
+
+	// Send a request to the tracker to announce the seeder
+	announce := trackingserver.Announce{
+		InfoHash: hex.EncodeToString(seeder.infoHash),
+		PeerID:   hex.EncodeToString(seeder.peerID),
+		IP:       strings.Split(seeder.addr.Network(), ":")[0],
+		Port:     s.port, 
+		Event:    trackingserver.STARTED,
+	}
+
+	var bencodedAnnounce bytes.Buffer
+	err := bencode.NewEncoder(&bencodedAnnounce).Encode(announce)
+	if err != nil {
+		log.Println("Error encoding announce:", err)
+		return
+	}
+
+	response, err := http.Post(TrackerAddr, "application/x-bittorrent", &bencodedAnnounce)
+	if err != nil {
+		log.Println("Error sending announce:", err)
+		return
+	}
+	defer response.Body.Close()
+
+	// Read the response
+	buf := make([]byte, 1024)
+	n, err := response.Body.Read(buf)
+	if err != nil {
+		log.Println("Error reading response:", err)
+		return
+	}
+
+	fmt.Println("Announce response:", string(buf[:n]))
+}
 
 // In main, we should have a thread listening for new connections, that also has a SeederStack keeping track of all of the files that we are seeding
 // For every file we fully download, we should create a new Seeder that continually listens for new connections
-func (s *SeederStack) listen(port string) {
-	// Listen for new connections
-	conn, err := net.Listen("tcp", ":"+port)
+// Listen tries to bind to a port (string) and retries with consecutive ports up to a limit
+func (s *SeederStack) Listen(startPort int, maxRetries int) {
+	var listener net.Listener
+	var err error
+	currentPort := startPort
+
+	// Retry listening on consecutive ports until maxRetries is reached
+	for i := 0; i < maxRetries; i++ {
+		portStr := strconv.Itoa(currentPort)
+		listener, err = net.Listen("tcp", ":"+portStr)
+		if err == nil {
+			log.Printf("Listening on port %d", currentPort)
+			break
+		}
+
+		log.Printf("Port %d is unavailable, retrying with port %d...", currentPort, currentPort+1)
+		currentPort++
+	}
+
+	// If no ports were available, log an error and return
 	if err != nil {
-		log.Println("Error listening:", err)
+		log.Fatalf("Error: Unable to bind to any port after %d retries: %v", maxRetries, err)
 		return
 	}
+	
+	s.mtx.Lock()
+	s.port = currentPort
+	s.mtx.Unlock()
+
+	defer listener.Close()
+
+	fmt.Println("Listening on port", currentPort)
+
+	// Accept incoming connections
 	for {
-		tcpConn, err := conn.Accept()
+		tcpConn, err := listener.Accept()
 		if err != nil {
+			log.Println("Error accepting connection:", err)
 			continue
 		}
 
@@ -49,7 +132,8 @@ func (s *SeederStack) listen(port string) {
 			tcpConn,
 		}
 
-		// Handle the handshake
+		// Handle the connection
+		fmt.Println("Received connection from", tcpConn.RemoteAddr())
 		go s.handleConn(leecher)
 	}
 }
@@ -82,9 +166,14 @@ func (s *SeederStack) handleConn(leecher Leecher) {
 		nil,
 		nil,
 		nil,
+		nil,
 		"",
 	}
-	for _, seeder := range *s {
+
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
+
+	for _, seeder := range s.seeders {
 		if bytes.Equal(seeder.infoHash, handshake.InfoHash[:]) {
 			// Add leecher to seeder's list of connected leechers
 			seeder.connectedLeechers = append(seeder.connectedLeechers, leecher)
@@ -92,6 +181,8 @@ func (s *SeederStack) handleConn(leecher Leecher) {
 			break
 		}
 	}
+
+	s.mtx.Unlock()
 
 	if cseeder.infoHash == nil {
 		// No seeder found
