@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -75,7 +76,7 @@ func (tracker *Tracker) GetPeers() map[string][]Peer {
 
 /// Listen is a function that listens for Announce messages from clients.
 func (tracker *Tracker) Listen() {
-	// port := os.Getenv("PORT")
+	port := os.Getenv("PORT")
 	http.HandleFunc("/announce", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
