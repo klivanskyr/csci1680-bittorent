@@ -88,7 +88,7 @@ func (tracker *Tracker) Listen() {
 	})
 
 	// Clears the current line
-	log.Print("\r\033[K", "Server Started, Listening on", ":"+"8080")
+	log.Print("\r\033[K", "Server Started, Listening on", port)
 	fmt.Print("> ")
 	log.Fatal(http.ListenAndServe(":"+"8080", nil))
 }
