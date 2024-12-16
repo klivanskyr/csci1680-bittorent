@@ -1,6 +1,6 @@
 import "./FileSelect.css";
 import { Tab } from "../../types";
-import { ReadFileToBytes, SelectTorrentFile, HashInfo, UnmarshalTorrent, SelectAnyFile, SendTrackerRequest } from "../../../wailsjs/go/main/App";
+import { ReadFileToBytes, SelectTorrentFile, HashInfo, UnmarshalTorrent, SelectAnyFile, SendTrackerRequest, DownloadFromSeeders, GeneratePeerID } from "../../../wailsjs/go/main/App";
 
 export default function FileSelect({ tab }: { tab: Tab }) {
 
@@ -10,13 +10,23 @@ export default function FileSelect({ tab }: { tab: Tab }) {
             const file = await SelectTorrentFile();
             const bytes = await ReadFileToBytes(file.Path);
             const torrent = await UnmarshalTorrent(bytes);
+            console.log("torrent:", torrent);
 
-            const hash = await HashInfo(file.Path); // I know this is ugly but ill refactor later hopefully
-            console.log("hash:", hash);
+            // Find total pieces THIS IS ONLY SUPPORTED FOR SINGLE FILE TORRENTS
+            const totalPieces = Math.ceil((torrent?.info?.length + torrent?.info?.["piece length"] - 1) / torrent?.info?.["piece length"]);
+
+            console.log("totalPieces:", totalPieces);
+
+            const infoHash = await HashInfo(file.Path); // I know this is ugly but ill refactor later hopefully
+            const peerId = await GeneratePeerID(); // I dont like how this is all frontend
 
             // Start GET requests to tracker server
-            const response = await SendTrackerRequest(torrent, hash);
-            console.log("response:", response);
+            const peers = await SendTrackerRequest(torrent, infoHash, peerId);
+            console.log("peers:", peers);
+
+            // Start downloading file from peers
+            await DownloadFromSeeders(peers, infoHash, peerId, totalPieces);
+
 
         } else {
             const file = await SelectAnyFile();

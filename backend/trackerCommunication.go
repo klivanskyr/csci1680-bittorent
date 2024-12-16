@@ -40,7 +40,7 @@ func HashInfo(torrentPath string) ([]byte, error) {
 	return info, nil
 }
 
-func generatePeerID() string {
+func GeneratePeerID() string {
 	const clientPrefix = "-GO0001-" // Go client
 
 	randomBytes := make([]byte, 12)
@@ -54,7 +54,7 @@ func generatePeerID() string {
 }
 
 // SendTrackerRequest sends a GET request to the tracker's announce URL.
-func SendTrackerRequest(torrent interface{}, infoHash []byte) (map[string]interface{}, error) {
+func SendTrackerRequest(torrent interface{}, infoHash []byte, peerId string) ([]string, error) {
 	fmt.Println("Sending tracker request... 1")
 	announce, ok := torrent.(map[string]interface{})["announce"].(string)
 	if !ok {
@@ -73,7 +73,6 @@ func SendTrackerRequest(torrent interface{}, infoHash []byte) (map[string]interf
 	}
 
 	if trackerType == "http" {
-		peerId := generatePeerID()
 		return sendHTTPTrackerRequest(peerId, announce, infoHash)
 	} else if trackerType == "udp" {
 		return nil, fmt.Errorf("unsupported tracker protocol UDP")
@@ -90,7 +89,7 @@ func URLEncodeBytes(data []byte) string {
 	return encoded
 }
 
-func sendHTTPTrackerRequest(peerId string, announce string, infoHash []byte) (map[string]interface{}, error) {
+func sendHTTPTrackerRequest(peerId string, announce string, infoHash []byte) ([]string, error) {
 	fmt.Println("Sending HTTP tracker request... 1")
 
 	// Manually encode each byte of the info_hash
@@ -154,7 +153,7 @@ func sendHTTPTrackerRequest(peerId string, announce string, infoHash []byte) (ma
 
 	fmt.Println("Peers:", peerList)
 	
-	return trackerResponse, nil
+	return peerList, nil
 }
 
 func parseCompactPeers(peers []byte) ([]string, error) {
