@@ -72,7 +72,7 @@ func (tracker *Tracker) Listen() {
 		handleAnnounce(tracker, &announce)
 	})
 
-	log.Fatal(http.ListenAndServe(port, nil))
+	log.Fatal(http.ListenAndServe(":"+port, nil))
 }
 
 // handleAnnounce is a function that handles an Announce message from a client.
