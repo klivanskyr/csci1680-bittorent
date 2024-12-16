@@ -133,6 +133,7 @@ func parsePiece(message []byte) (uint32, uint32, []byte) {
 
 func downloadFromSeeder(peer trackingserver.Peer, infoHash []byte, totalPieces uint32) error {
 	// Connect to the seeder
+	fmt.Println("\n\n\n\nConnecting to seeder...")
 	conn, err := net.Dial("tcp", fmt.Sprintf("%s:%d", peer.IP, peer.Port))
 	if err != nil { return err }
 	defer conn.Close()

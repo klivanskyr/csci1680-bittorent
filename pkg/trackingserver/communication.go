@@ -1,10 +1,11 @@
 package trackingserver
 
 import (
+	"encoding/hex"
 	"fmt"
 	"log"
 	"net/http"
-	"os"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -74,7 +75,7 @@ func (tracker *Tracker) GetPeers() map[string][]Peer {
 
 /// Listen is a function that listens for Announce messages from clients.
 func (tracker *Tracker) Listen() {
-	port := os.Getenv("PORT")
+	// port := os.Getenv("PORT")
 	http.HandleFunc("/announce", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
@@ -87,9 +88,9 @@ func (tracker *Tracker) Listen() {
 	})
 
 	// Clears the current line
-	log.Print("\r\033[K", "Server Started, Listening on", )
+	log.Print("\r\033[K", "Server Started, Listening on", ":"+"8080")
 	fmt.Print("> ")
-	log.Fatal(http.ListenAndServe(":"+port, nil))
+	log.Fatal(http.ListenAndServe(":"+"8080", nil))
 }
 
 // handleAnnouncePOST handles POST requests to the /announce endpoint.
@@ -106,7 +107,7 @@ func handleAnnouncePOST(w http.ResponseWriter, r *http.Request, tracker *Tracker
 
 	// Convert the AnnounceRequest to an Announce struct
 	announce := Announce{
-		InfoHash: string(announceRequest.InfoHash),
+		InfoHash: hex.EncodeToString(announceRequest.InfoHash), // Convert InfoHash to hex encoded string
 		PeerID:   string(announceRequest.PeerID),
 		IP:       announceRequest.IP,
 		Port:     announceRequest.Port,
@@ -179,9 +180,23 @@ func handleAnnounceGET(w http.ResponseWriter, r *http.Request, tracker *Tracker)
 		}
 	}
 
+	// InfoHash is hex encoded, so decode it	
+	infoHashUrlDecoded, err := url.QueryUnescape(infoHash)
+	if err != nil {
+		http.Error(w, "Invalid info_hash", http.StatusBadRequest)
+		return
+	}
+
+	infoHashBytes := []byte(infoHashUrlDecoded)
+
+	// Encode the info_hash bytes to hex
+	infoHashHex := hex.EncodeToString(infoHashBytes)
+
+	fmt.Println("Received Announce Message for InfoHash:", infoHashHex)
+
 	// Create the Announce struct
 	announce := Announce{
-		InfoHash: infoHash,
+		InfoHash: infoHashHex,
 		PeerID:   peerID,
 		IP:       ip,
 		Port:     portInt,
@@ -198,7 +213,10 @@ func handleAnnounce(w http.ResponseWriter, tracker *Tracker, announce *Announce)
 	tracker.mtx.Lock()
 	defer tracker.mtx.Unlock()
 
+	fmt.Println("Received Announce Message for InfoHash:", announce.InfoHash)
+
 	peers := tracker.peers[announce.InfoHash]
+	fmt.Println("Peers:", peers)
 	seeders := []Peer{}
 
 	fmt.Print("Received Announce Message from ", announce.IP, ":", announce.Port, "\n")

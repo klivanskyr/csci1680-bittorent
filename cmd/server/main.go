@@ -29,10 +29,13 @@ func main() {
 			fmt.Println("  lp - display the list of peers")
 			fmt.Println("  exit - exit the program")
 		case "lp":
-			peers := tracker.GetPeers()
+			peersMap := tracker.GetPeers()
 			fmt.Println("Peers:")
-			for _, peer := range peers {
-				fmt.Println(peer)
+			for hash, peers := range peersMap {
+				fmt.Println("  InfoHash:", hash)
+				for _, peer := range peers {
+					fmt.Print("    ", peer.IP, ":", peer.Port, "\n")
+				}
 			}
 		case "exit":
 			fmt.Println("Exiting...")
