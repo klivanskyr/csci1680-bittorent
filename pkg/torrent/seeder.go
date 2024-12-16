@@ -160,6 +160,31 @@ type HandshakeMessage struct {
 	PeerID   [20]byte
 }
 
+func (hm *HandshakeMessage) Marshal() ([]byte, error) {
+	// Marshal the handshake message
+	buf := make([]byte, 68)
+	buf[0] = byte(len(hm.Pstr))
+	copy(buf[1:], []byte(hm.Pstr))
+
+	copy(buf[28:], hm.InfoHash[:])
+	copy(buf[48:], hm.PeerID[:])
+	
+	return buf, nil
+}
+
+func UnmarshalHandshake(buf []byte) (*HandshakeMessage, error) {
+	// Unmarshal the handshake message
+	hm := HandshakeMessage{
+		string(buf[1:20]),
+		[20]byte{},
+		[20]byte{},
+	}
+	copy(hm.InfoHash[:], buf[28:48])
+	copy(hm.PeerID[:], buf[48:68])
+
+	return &hm, nil
+}
+
 // First, they exchange a handshake exchanging info_hash and peer_id
 func (s *SeederStack) handleConn(leecher Leecher) {
 	// Receive initial handshake
@@ -216,35 +241,80 @@ func (s *SeederStack) handleConn(leecher Leecher) {
 
 	// Now we handle the rest of the messages
 	for {
-		buf := make([]byte, 4)
+		buf := make([]byte, 5)
 		leecher.tcpConn.Read(buf)
-		length := int(buf[0])<<24 | int(buf[1])<<16 | int(buf[2])<<8 | int(buf[3])
+		
+		length := uint32(buf[0])<<24 | uint32(buf[1])<<16 | uint32(buf[2])<<8 | uint32(buf[3])
+		buf2 := make([]byte, length)
+		leecher.tcpConn.Read(buf2)
 
-		buf = make([]byte, length)
-		leecher.tcpConn.Read(buf)
+		buf = append(buf, buf2...)
+
+		// Unmarshal the message
+		message, err := UnmarshalMessage(buf)
+		if err != nil {
+			log.Println("Error unmarshalling message:", err)
+			return
+		}
 
 		// Here, we could stretch implement a switch statement to handle different types of messages that are in the actual protocol
 		// For now, we handle just one, the bitfield message
-		if buf[0] == 5 {
+		if message.ID == 5 {
+			// We don't handle this case in the end
+
 			// Handle bitfield message
-			leecher.bitfield = buf[1:]
-			cseeder.handleBitfield(leecher)
+			// leecher.bitfield = buf[1:]
+			// cseeder.handleBitfield(leecher)
+		} else if message.ID == 6 {
+			// Handle request message
+			// The index is the first 4 bytes of the payload
+			pieceIndex := message.Payload[0]
+
+			// cseeder.handleRequest(leecher, buf)
+			cseeder.sendPiece(int(pieceIndex), leecher)
 		}
 	}
 }
 
-// Then, the leecher sends a bitfield message indicating which pieces it has
-func (s *Seeder) handleBitfield(leecher Leecher) {
-	// Send all of the pieces that the leecher doesn't have
-	for _, b := range leecher.bitfield {
-		for i := 0; i < 8; i++ {
-			if b&(1<<i) == 0 {
-				// Send piece
-				s.sendPiece(i, leecher)
-			}
-		}
+const (
+	Choke         int8 = 0
+	Unchoke       int8 = 1
+	Interested    int8 = 2
+	NotInterested int8 = 3
+	Bitfield 	int8 = 5
+	Request       int8 = 6
+	Piece         int8 = 7
+)
+
+type Message struct {
+	Length  uint32
+	ID      int8
+	Payload []byte
+}
+
+
+func (m *Message) Marshal() ([]byte, error) {
+	// Marshal the message
+	buf := make([]byte, 5+len(m.Payload))
+	buf[0] = byte(m.ID)
+	buf[1] = byte(m.Length >> 24)
+	buf[2] = byte(m.Length >> 16)
+	buf[3] = byte(m.Length >> 8)
+	buf[4] = byte(m.Length)
+	copy(buf[5:], m.Payload)
+
+	return buf, nil
+}
+
+func UnmarshalMessage(buf []byte) (*Message, error) {
+	// Unmarshal the message
+	m := Message{
+		uint32(buf[1])<<24 | uint32(buf[2])<<16 | uint32(buf[3])<<8 | uint32(buf[4]),
+		int8(buf[0]),
+		buf[5:],
 	}
 
+	return &m, nil
 }
 
 // The seeder then responds by providing the pieces requested
@@ -272,7 +342,20 @@ func (s *Seeder) sendPiece(pieceIndex int, leecher Leecher) {
 		return
 	}
 
-	buf = append([]byte{byte(pieceIndex)}, buf...)
+	// Create the piece message
+	message := Message{
+		Length:  uint32(len(buf) + 1),
+		ID:      7,
+		Payload: append([]byte{byte(pieceIndex)}, buf...),
+	}
+
+	// Marshal the message
+	msgBytes, err := message.Marshal()
+	if err != nil {
+		log.Println("Error marshalling piece message:", err)
+		return
+	}
+
 	// Send the piece
-	leecher.tcpConn.Write(buf)
+	leecher.tcpConn.Write(msgBytes)
 }

@@ -75,7 +75,7 @@ func (tracker *Tracker) GetPeers() map[string][]Peer {
 
 // / Listen is a function that listens for Announce messages from clients.
 func (tracker *Tracker) Listen() {
-	port := "8080" //os.Getenv("PORT")
+	port := "80" //os.Getenv("PORT")
 	http.HandleFunc("/announce", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
@@ -90,7 +90,7 @@ func (tracker *Tracker) Listen() {
 	// Clears the current line
 	log.Print("\r\033[K", "Server Started, Listening on ", port)
 	fmt.Print("> ")
-	log.Fatal(http.ListenAndServe(":"+"8080", nil))
+	log.Fatal(http.ListenAndServe(":"+port, nil))
 }
 
 // handleAnnouncePOST handles POST requests to the /announce endpoint.
