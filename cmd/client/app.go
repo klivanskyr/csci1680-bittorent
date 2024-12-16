@@ -15,17 +15,20 @@ type App struct {
 
 // NewApp creates a new App application struct
 func NewApp() *App {
-	return &App{}
+	// Create a new App	
+	a := App{}
+
+	// start seeder stack
+	a.seederStack = &torrent.SeederStack{}
+	go a.seederStack.Listen(6881, 10) // Start listening on port 6881 with 10 retries
+
+	return &a
 }
 
 // startup is called when the app starts. The context is saved
 // so we can call the runtime methods
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
-
-	// start seeder stack
-	a.seederStack = &torrent.SeederStack{}
-	go a.seederStack.Listen(6881, 10) // Start listening on port 6881 with 10 retries
 }
 
 // SelectTorrentFile opens a file dialog, allowing only .torrent files and returns the selected file path

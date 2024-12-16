@@ -3,7 +3,9 @@ package torrent
 import (
 	"bytes"
 	"crypto/sha1"
+	"fmt"
 	"io"
+	"net"
 	"os"
 	"strings"
 
@@ -53,7 +55,7 @@ func CreateTorrentFile(seederStack *SeederStack, filePath string) ([]byte, error
 
 	// Define the torrent metadata
 	torrent := Torrent{
-		Announce: "1.2.3.4:5678", // This should be the URL of the tracker server
+		Announce: "127.0.0.1:8080", // This should be the URL of the tracker server
 		Info: TorrentInfo{
 			Name:        fileName,
 			Length:      fileInfo.Size(),
@@ -70,12 +72,23 @@ func CreateTorrentFile(seederStack *SeederStack, filePath string) ([]byte, error
 	}
 
 	// Adds to seeder stack and sends POST request to tracker
-	seederStack.AddSeeder(Seeder{
-		infoHash:          []byte(hasher.Sum(nil)), //TEMP 
-		peerID:            []byte("12345678901234567890"), //TEMP
+	seederStack.mtx.Lock()
+	seederPort := seederStack.port
+	seederStack.mtx.Unlock()
+
+	err = seederStack.AddSeeder(Seeder{
+		addr:              &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: seederPort}, //Right now just local host
+		infoHash:          []byte("10101010"), //TEMP HEX HASH 
+		peerID:            []byte("12345678901234567890"), //TEMP PEER ID
 		filepath:          filePath,
 		connectedLeechers: []Leecher{},
-	}) 
+	})
+	if err != nil {
+		/* This error means that if we couldn't upload to the tracker server,
+			we should not give you the torrent file */
+		fmt.Println("Error adding seeder to stack: ", err)
+		return nil, err
+	}
 
 	return buffer.Bytes(), nil
 }

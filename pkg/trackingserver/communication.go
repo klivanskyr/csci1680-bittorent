@@ -12,9 +12,18 @@ import (
 )
 
 // Announce is the message sent by the client to the tracking server to announce its presence.
+// InfoHash and PeerID MUST be sent as bytes by the client to be able to be correctly decoded by the server.
+// After decoding, the server will convert the bytes to string and create an Announce struct.
+type AnnounceRequest struct {
+	InfoHash []byte `bencode:"info_hash"` // The info_hash of the file the client is downloading
+	PeerID   []byte `bencode:"peer_id"`   // The peer_id of the client
+	IP       string `bencode:"ip"`        // The IP address of the client
+	Port     int    `bencode:"port"`      // The port the client is listening on
+	Event    int    `bencode:"event"`     // The event of the announce message
+}
 type Announce struct {
-	InfoHash string `bencode:"info_hash: hex"` // The info_hash of the file the client is downloading
-	PeerID   string `bencode:"peer_id: hex"`   // The peer_id of the client
+	InfoHash string `bencode:"info_hash"` // The info_hash of the file the client is downloading
+	PeerID   string `bencode:"peer_id"`   // The peer_id of the client
 	IP       string `bencode:"ip"`        // The IP address of the client
 	Port     int    `bencode:"port"`      // The port the client is listening on
 	Event    int    `bencode:"event"`     // The event of the announce message
@@ -53,6 +62,13 @@ func NewTracker() *Tracker {
 	}
 }
 
+func (tracker *Tracker) GetPeers() map[string][]Peer {
+	tracker.mtx.Lock()
+	defer tracker.mtx.Unlock()
+
+	return tracker.peers
+}
+const listenAddr = ":8080"
 /// Listen is a function that listens for Announce messages from clients.
 func (tracker *Tracker) Listen() {
 	http.HandleFunc("/announce", func(w http.ResponseWriter, r *http.Request) {
@@ -66,18 +82,31 @@ func (tracker *Tracker) Listen() {
 		}
 	})
 
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	// Clears the current line
+	log.Print("\r\033[K", "Server Started, Listening on", listenAddr)
+	fmt.Print("> ")
+	log.Fatal(http.ListenAndServe(listenAddr, nil))
 }
 
 // handleAnnouncePOST handles POST requests to the /announce endpoint.
 // Used when seeder wants to register itself with the tracker.
 func handleAnnouncePOST(w http.ResponseWriter, r *http.Request, tracker *Tracker) {
+	fmt.Println("Received POST request from", r.RemoteAddr)
 	// Parse the bencoded request body
-	var announce Announce
-	err := bencode.NewDecoder(r.Body).Decode(&announce)
+	var announceRequest AnnounceRequest
+	err := bencode.NewDecoder(r.Body).Decode(&announceRequest)
 	if err != nil {
 		http.Error(w, "Invalid bencoded payload", http.StatusBadRequest)
 		return
+	}
+
+	// Convert the AnnounceRequest to an Announce struct
+	announce := Announce{
+		InfoHash: string(announceRequest.InfoHash),
+		PeerID:   string(announceRequest.PeerID),
+		IP:       announceRequest.IP,
+		Port:     announceRequest.Port,
+		Event:    announceRequest.Event,
 	}
 
 	// Validate required fields
@@ -88,7 +117,6 @@ func handleAnnouncePOST(w http.ResponseWriter, r *http.Request, tracker *Tracker
 
 	// Add the seeder to the tracker's list
 	tracker.mtx.Lock()
-	defer tracker.mtx.Unlock()
 	tracker.peers[announce.InfoHash] = append(tracker.peers[announce.InfoHash], Peer{
 		PeerID:       announce.PeerID,
 		Seeder:       true,
@@ -98,13 +126,20 @@ func handleAnnouncePOST(w http.ResponseWriter, r *http.Request, tracker *Tracker
 	})
 	tracker.mtx.Unlock()
 
-	// Respond with a bencoded confirmation message
+	// encode response first for error handling
 	response := map[string]string{"status": "Seeder added successfully"}
-	w.Header().Set("Content-Type", "application/x-bittorrent")
-	err = bencode.NewEncoder(w).Encode(response)
+	var encodedResponse []byte
+	encodedResponse, err = bencode.EncodeBytes(response)
 	if err != nil {
+		http.Error(w, "Error encoding response", http.StatusInternalServerError)
 		log.Println("Error encoding response:", err)
+		return
 	}
+
+	// Set the response headers
+	w.Header().Set("Content-Type", "application/x-bittorrent")
+	w.WriteHeader(http.StatusOK)
+	w.Write(encodedResponse)
 }
 
 // handleAnnounceGET handles GET requests to the /announce endpoint.

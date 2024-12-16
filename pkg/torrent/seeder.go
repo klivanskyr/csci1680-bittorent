@@ -2,14 +2,16 @@ package torrent
 
 import (
 	"bytes"
-	"encoding/hex"
+	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"net/http"
 	"os"
 	"strconv"
-	"strings"
+
+	// "strings"
 	"sync"
 
 	"bittorrent/pkg/trackingserver"
@@ -17,7 +19,7 @@ import (
 	"github.com/zeebo/bencode"
 )
 
-const TrackerAddr = "http://127.0.0.1:8080"
+const TrackerAddr = "http://127.0.0.1:8080/announce"
 // All the seeder needs to do is respond to requests for specific pieces of a file
 
 // Piece size is set to 512 but we should edit how we do this on this receiver side to accept different piece sized based on peer
@@ -43,43 +45,56 @@ type SeederStack struct {
 	port    int
 }
 
-func (s *SeederStack) AddSeeder(seeder Seeder) {
+// Adds Seeder to SeederStack and sends POST request to tracker
+func (s *SeederStack) AddSeeder(seeder Seeder) error {
 	s.mtx.Lock()
 	s.seeders = append(s.seeders, seeder)
 	s.mtx.Unlock()
 
 	// Send a request to the tracker to announce the seeder
-	announce := trackingserver.Announce{
-		InfoHash: hex.EncodeToString(seeder.infoHash),
-		PeerID:   hex.EncodeToString(seeder.peerID),
-		IP:       strings.Split(seeder.addr.Network(), ":")[0],
+	announce := trackingserver.AnnounceRequest{
+		InfoHash: seeder.infoHash,
+		PeerID:   seeder.peerID,
+		IP:       seeder.addr.String(),
 		Port:     s.port, 
 		Event:    trackingserver.STARTED,
 	}
 
+	// //debubg announce
+	// fmt.Println("InfoHash: ", announce.InfoHash)
+	// fmt.Println("PeerID: ", announce.PeerID)
+	// fmt.Println("IP: ", announce.IP)
+	// fmt.Println("Port: ", announce.Port)
+	// fmt.Println("Event: ", announce.Event)
+
 	var bencodedAnnounce bytes.Buffer
 	err := bencode.NewEncoder(&bencodedAnnounce).Encode(announce)
 	if err != nil {
-		log.Println("Error encoding announce:", err)
-		return
+		return errors.New("error encoding announce")
 	}
 
 	response, err := http.Post(TrackerAddr, "application/x-bittorrent", &bencodedAnnounce)
 	if err != nil {
-		log.Println("Error sending announce:", err)
-		return
+		return errors.New("error sending POST request to tracker")
 	}
 	defer response.Body.Close()
 
-	// Read the response
-	buf := make([]byte, 1024)
-	n, err := response.Body.Read(buf)
+	// Read the response body to bytes
+	responseBytes, err := io.ReadAll(response.Body)
 	if err != nil {
-		log.Println("Error reading response:", err)
-		return
+		return errors.New("error reading response body")
 	}
 
-	fmt.Println("Announce response:", string(buf[:n]))
+	// Decode the response
+	var decodedResponse map[string]interface{}
+	err = bencode.NewDecoder(bytes.NewReader(responseBytes)).Decode(&decodedResponse)
+	if err != nil {
+		return errors.New("error decoding response")
+	}
+
+	fmt.Println("Decoded response:", decodedResponse)
+
+	return nil
 }
 
 // In main, we should have a thread listening for new connections, that also has a SeederStack keeping track of all of the files that we are seeding
