@@ -3,7 +3,6 @@ import { Tab } from "../../types";
 import { 
     ReadFileToBytes, 
     SelectTorrentFile, 
-    HashInfo, 
     UnmarshalTorrent,
     SelectAnyFile,
     SendTrackerRequest, 
@@ -30,11 +29,10 @@ export default function FileSelect({ tab }: { tab: Tab }) {
             const torrent = await UnmarshalTorrent(bytes);
             console.log("torrent:", torrent);
 
-            // Find total pieces THIS IS ONLY SUPPORTED FOR SINGLE FILE TORRENTS
             const totalPieces = Math.ceil((torrent.Info.Length + torrent.Info.PieceLength - 1) / torrent.Info.PieceLength);
             console.log("totalPieces:", totalPieces);
 
-            const peerId = await GeneratePeerID(); // I dont like how this is all frontend
+            const peerId = await GeneratePeerID(); // I dont like how this is frontend
 
             // Start GET requests to tracker server
             const peers = await SendTrackerRequest(torrent, peerId);
