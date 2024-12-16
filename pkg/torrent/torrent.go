@@ -30,7 +30,6 @@ func (torrent *Torrent) HashInfo() ([]byte, error) {
 	}
 
 	hash := sha1.Sum(buf.Bytes())
-	fmt.Printf("Hashed info dictionary: %x\n", hash)
 
 	return hash[:], nil
 }

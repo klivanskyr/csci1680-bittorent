@@ -5,14 +5,14 @@ import (
 
 	"bittorrent/pkg/client"
 	"bittorrent/pkg/files"
-	"bittorrent/pkg/torrent"
+	Torrent "bittorrent/pkg/torrent"
 	"bittorrent/pkg/trackingserver"
 )
 
 // App struct
 type App struct {
 	ctx context.Context
-	seederStack *torrent.SeederStack
+	seederStack *Torrent.SeederStack
 }
 
 // NewApp creates a new App application struct
@@ -21,7 +21,7 @@ func NewApp() *App {
 	a := App{}
 
 	// start seeder stack
-	a.seederStack = &torrent.SeederStack{}
+	a.seederStack = &Torrent.SeederStack{}
 	go a.seederStack.Listen(6881, 10) // Start listening on port 6881 with 10 retries
 
 	return &a
@@ -49,8 +49,8 @@ func (a *App) ReadFileToBytes(path string) ([]byte, error) {
 }
 
 // ConvertBencodeToJSON converts bencoded data to JSON
-func (a *App) UnmarshalTorrent(data []byte) (*torrent.Torrent, error) {
-	t, err := torrent.UnmarshalTorrent(data)
+func (a *App) UnmarshalTorrent(data []byte) (*Torrent.Torrent, error) {
+	t, err := Torrent.UnmarshalTorrent(data)
 	if err != nil {
 		return nil, err
 	}
@@ -58,16 +58,16 @@ func (a *App) UnmarshalTorrent(data []byte) (*torrent.Torrent, error) {
 }
 
 // SendTrackerRequest sends a GET request to the tracker's announce URL
-func (a *App) SendTrackerRequest(torrent torrent.Torrent, peerId string) ([]trackingserver.Peer, error) {
+func (a *App) SendTrackerRequest(torrent Torrent.Torrent, peerId string) ([]trackingserver.Peer, error) {
 	return client.SendTrackerRequest(torrent, peerId)
 }
 
-func (a *App) HashInfo(torrent torrent.Torrent) ([]byte, error) {
+func (a *App) HashInfo(torrent Torrent.Torrent) ([]byte, error) {
 	return torrent.HashInfo()
 }
 
-func (a *App) DownloadFromSeeders(peers []trackingserver.Peer, torrent torrent.Torrent, totalPieces uint32) error {
-	return client.DownloadFromSeeders(peers, torrent, totalPieces)
+func (a *App) DownloadFromSeeders(peers []trackingserver.Peer, torrent Torrent.Torrent, totalPieces uint32) error {
+	return Torrent.DownloadFromSeeders(peers, torrent, totalPieces)
 }
 
 func (a *App) GeneratePeerID() string {
@@ -75,7 +75,7 @@ func (a *App) GeneratePeerID() string {
 }
 
 func (a *App) CreateTorrentFile(filePath string) ([]byte, error) {
-	return torrent.CreateTorrentFile(a.seederStack, filePath, client.GeneratePeerID()) // Every torrent file has new peerId which is wrong
+	return Torrent.CreateTorrentFile(a.seederStack, filePath, client.GeneratePeerID()) // Every torrent file has new peerId which is wrong
 }
 
 func (a *App) SaveFileFromBytes(data []byte, defaultFileName string, displayName string, pattern string) error {

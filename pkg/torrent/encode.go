@@ -43,7 +43,7 @@ func CreateTorrentFile(seederStack *SeederStack, filePath string, peerID string)
 
 	// Define the torrent metadata
 	torrent := Torrent{
-		Announce: "http://127.0.0.1:8080/announce", // This should be the URL of the tracker server
+		Announce: TrackerAddr, 
 		Info: TorrentInfo{
 			Name:        fileName,
 			Length:      fileInfo.Size(),
@@ -72,7 +72,7 @@ func CreateTorrentFile(seederStack *SeederStack, filePath string, peerID string)
 	fmt.Println("Hash Info: ", hashInfo)
 
 	err = seederStack.AddSeeder(Seeder{
-		addr:              &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: seederPort}, //Right now just local host
+		addr:              &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: seederPort}, //Right now just local host, THIS IS THE SEEDERS IP
 		infoHash:          hashInfo,
 		peerID:            []byte(peerID),
 		filepath:          filePath,

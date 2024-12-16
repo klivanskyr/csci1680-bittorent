@@ -30,9 +30,6 @@ func GeneratePeerID() string {
 
 // SendTrackerRequest sends a GET request to the tracker's announce URL.
 func SendTrackerRequest(torrent torrent.Torrent, peerId string) ([]TrackingServer.Peer, error) {
-	fmt.Println("Sending tracker request... 1")
-	fmt.Println("Torrent: ", torrent)
-
 	// Announce can be either UDP or HTTP
 	// We are going to ignore announce list for now
 	var trackerType string
@@ -66,8 +63,6 @@ func URLEncodeBytes(data []byte) string {
 }
 
 func sendHTTPTrackerRequest(peerId string, announce string, infoHash []byte) ([]TrackingServer.Peer, error) {
-	fmt.Println("Sending HTTP tracker request... 1")
-
 	// Manually encode each byte of the info_hash
 	encodedInfoHash := URLEncodeBytes(infoHash)
 
@@ -81,7 +76,6 @@ func sendHTTPTrackerRequest(peerId string, announce string, infoHash []byte) ([]
 	// Construct the full request URL
 	requestURL := fmt.Sprintf("%s?%s", announce, query)
 
-	fmt.Println("Sending HTTP tracker request... 2")
 	fmt.Println("Request URL:", requestURL)
 
 	// Create a new HTTP request
@@ -115,8 +109,6 @@ func sendHTTPTrackerRequest(peerId string, announce string, infoHash []byte) ([]
 	if err != nil {
 		return nil, fmt.Errorf("error decoding tracker response: %v", err)
 	}
-
-	fmt.Println("Peers:", trackerResponse.Peers)
 	
 	return trackerResponse.Peers, nil
 }
