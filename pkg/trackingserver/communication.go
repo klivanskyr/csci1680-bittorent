@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -70,7 +71,7 @@ func (tracker *Tracker) GetPeers() map[string][]Peer {
 
 	return tracker.peers
 }
-const listenAddr = ":8080"
+
 /// Listen is a function that listens for Announce messages from clients.
 func (tracker *Tracker) Listen() {
 	port := os.Getenv("PORT")
@@ -86,9 +87,9 @@ func (tracker *Tracker) Listen() {
 	})
 
 	// Clears the current line
-	log.Print("\r\033[K", "Server Started, Listening on", listenAddr)
+	log.Print("\r\033[K", "Server Started, Listening on", )
 	fmt.Print("> ")
-	log.Fatal(http.ListenAndServe(listenAddr, nil))
+	log.Fatal(http.ListenAndServe(":"+port, nil))
 }
 
 // handleAnnouncePOST handles POST requests to the /announce endpoint.
