@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"sync"
 	"time"
 
@@ -57,6 +58,7 @@ func NewTracker() *Tracker {
 
 // Listen is a function that listens for Announce messages from clients.
 func (tracker *Tracker) Listen() {
+	port := os.Getenv("PORT")
 	http.HandleFunc("/announce", func(w http.ResponseWriter, r *http.Request) {
 		// Parse the Announce message from the request body
 		var announce Announce
@@ -70,7 +72,7 @@ func (tracker *Tracker) Listen() {
 		handleAnnounce(tracker, &announce)
 	})
 
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	log.Fatal(http.ListenAndServe(port, nil))
 }
 
 // handleAnnounce is a function that handles an Announce message from a client.
