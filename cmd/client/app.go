@@ -3,17 +3,28 @@ package main
 import (
 	"context"
 
-	"bittorrent/cmd/client/backend"
+	"bittorrent/pkg/client"
+	"bittorrent/pkg/files"
+	"bittorrent/pkg/torrent"
+	"bittorrent/pkg/trackingserver"
 )
 
 // App struct
 type App struct {
 	ctx context.Context
+	seederStack *torrent.SeederStack
 }
 
 // NewApp creates a new App application struct
 func NewApp() *App {
-	return &App{}
+	// Create a new App	
+	a := App{}
+
+	// start seeder stack
+	a.seederStack = &torrent.SeederStack{}
+	go a.seederStack.Listen(6881, 10) // Start listening on port 6881 with 10 retries
+
+	return &a
 }
 
 // startup is called when the app starts. The context is saved
@@ -38,16 +49,35 @@ func (a *App) ReadFileToBytes(path string) ([]byte, error) {
 }
 
 // ConvertBencodeToJSON converts bencoded data to JSON
-func (a *App) UnmarshalTorrent(data []byte) (interface{}, error) {
-	return backend.UnmarshalTorrent(data)
+func (a *App) UnmarshalTorrent(data []byte) (*torrent.Torrent, error) {
+	t, err := torrent.UnmarshalTorrent(data)
+	if err != nil {
+		return nil, err
+	}
+	return t, nil
 }
 
 // SendTrackerRequest sends a GET request to the tracker's announce URL
-func (a *App) SendTrackerRequest(torrent interface{}, infoHash []byte) (map[string]interface{}, error) {
-	return backend.SendTrackerRequest(torrent, infoHash)
+func (a *App) SendTrackerRequest(torrent torrent.Torrent, peerId string) ([]trackingserver.Peer, error) {
+	return client.SendTrackerRequest(torrent, peerId)
 }
 
-func (a *App) HashInfo(torrentPath string) ([]byte, error) {
-	return backend.HashInfo(torrentPath)
+func (a *App) HashInfo(torrent torrent.Torrent) ([]byte, error) {
+	return torrent.HashInfo()
 }
 
+func (a *App) DownloadFromSeeders(peers []trackingserver.Peer, torrent torrent.Torrent, totalPieces uint32) error {
+	return client.DownloadFromSeeders(peers, torrent, totalPieces)
+}
+
+func (a *App) GeneratePeerID() string {
+	return client.GeneratePeerID()
+}
+
+func (a *App) CreateTorrentFile(filePath string) ([]byte, error) {
+	return torrent.CreateTorrentFile(a.seederStack, filePath, client.GeneratePeerID()) // Every torrent file has new peerId which is wrong
+}
+
+func (a *App) SaveFileFromBytes(data []byte, defaultFileName string, displayName string, pattern string) error {
+	return backend.SaveFileFromBytes(a.ctx, data, defaultFileName, displayName, pattern)
+}

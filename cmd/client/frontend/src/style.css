@@ -40,7 +40,7 @@ body {
 
 .button-1 {
     background-color: #fff;
-    border: 1px solid #d5d9d9;
+    border: 0.5px solid #d5d9d9;
     border-radius: 8px;
     box-shadow: rgba(213, 217, 217, .5) 0 2px 5px 0;
     box-sizing: border-box;
@@ -48,8 +48,8 @@ body {
     cursor: pointer;
     display: inline-block;
     font-family: "Amazon Ember",sans-serif;
-    font-size: 13px;
-    line-height: 29px;
+    font-size: 0.85rem;
+    line-height: 1.75rem;
     padding: 0 10px 0 11px;
     position: relative;
     text-align: center;
@@ -58,9 +58,19 @@ body {
     -webkit-user-select: none;
     touch-action: manipulation;
     vertical-align: middle;
-    width: 100px;
+    min-width: 100px;
+    width: 100%;
   }
   
 .button-1:hover {
     background-color: #f7fafa;
+}
+
+.button-1:active {
+    background-color: #f0f2f2;
+    box-shadow: rgba(0, 0, 0, .2) 0 1px 2px 0;
+}
+
+.button-1-active {
+    background-color: aliceblue !important;
 }
