@@ -23,6 +23,8 @@ server:
 	@echo "Building server..."
 	@go build -o $(SERVER_BIN) $(SERVER_DIR)/main.go
 
+#GOOS=linux GOARCH=amd64 go build -o bin/server cmd/server/main.go, this is for linux VM in bash
+
 # Run client
 run-client: client
 	@echo "Running client..."
