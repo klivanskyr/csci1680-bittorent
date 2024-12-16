@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os"
 	"strings"
 	"sync"
 	"time"
@@ -45,7 +44,7 @@ type AnnounceResponse struct {
 
 // Peer is a struct that represents a peer that has the file the client is downloading.
 type Peer struct {
-	PeerID       string    `bencode:"peer_id: hex"`       // The peer_id of the peer
+	PeerID       string    `bencode:"peer_id: hex"`  // The peer_id of the peer
 	Seeder       bool      `bencode:"seeder"`        // Whether the peer has downloaded the file
 	IP           string    `bencode:"ip"`            // The IP address of the peer
 	Port         int       `bencode:"port"`          // The port the peer is listening on
@@ -54,8 +53,8 @@ type Peer struct {
 
 // Tracker is a struct that represents a tracking server, keeping a map of info_hashes to a list of peers.
 type Tracker struct {
-	mtx   sync.Mutex            // A mutex to protect the peers map
-	peers map[string][]Peer     // A map of info_hashes to a list of peers
+	mtx   sync.Mutex        // A mutex to protect the peers map
+	peers map[string][]Peer // A map of info_hashes to a list of peers
 }
 
 // NewTracker is a function that creates a new tracking server.
@@ -72,9 +71,9 @@ func (tracker *Tracker) GetPeers() map[string][]Peer {
 	return tracker.peers
 }
 
-/// Listen is a function that listens for Announce messages from clients.
+// / Listen is a function that listens for Announce messages from clients.
 func (tracker *Tracker) Listen() {
-	port := os.Getenv("PORT")
+	port := "8080" //os.Getenv("PORT")
 	http.HandleFunc("/announce", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
@@ -87,7 +86,7 @@ func (tracker *Tracker) Listen() {
 	})
 
 	// Clears the current line
-	log.Print("\r\033[K", "Server Started, Listening on", port)
+	log.Print("\r\033[K", "Server Started, Listening on ", port)
 	fmt.Print("> ")
 	log.Fatal(http.ListenAndServe(":"+port, nil))
 }
