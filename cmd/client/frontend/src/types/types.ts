@@ -1,1 +1,1 @@
-export type Tab = "download" | "upload"
+export type Tab = "Home" | "Download" | "Upload"

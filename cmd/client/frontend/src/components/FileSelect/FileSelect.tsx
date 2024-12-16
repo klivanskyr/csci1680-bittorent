@@ -22,7 +22,7 @@ export default function FileSelect({ tab }: { tab: Tab }) {
     const [file, setFile] = useState<File | null>(null); // used for uploading
 
     const handleFileSelect = async () => {
-        if (tab === "download") {
+        if (tab === "Download") {
             // Parse torrent file
             const file = await SelectTorrentFile();
             const bytes = await ReadFileToBytes(file.Path);
@@ -42,7 +42,7 @@ export default function FileSelect({ tab }: { tab: Tab }) {
             await DownloadFromSeeders(peers, torrent, totalPieces);
 
 
-        } else { // tab === "upload"
+        } else if (tab === "Upload" ) { // tab === "upload"
             const file = await SelectAnyFile();
             const torrentBytes = await CreateTorrentFile(file.Path);
             setFile({ bytes: torrentBytes, name: file.Name });
@@ -56,8 +56,8 @@ export default function FileSelect({ tab }: { tab: Tab }) {
 
     return (
         <div>
-            {(tab === "download" || !file) && <button className="button-1" onClick={() => handleFileSelect()}>Select File</button>}
-            {(tab === "upload" && file) &&
+            {(tab === "Download" || !file) && <button className="button-1" onClick={() => handleFileSelect()}>Select File</button>}
+            {(tab === "Upload" && file) &&
                 <button className="button-1 button-download" onClick={() => handleDownload()}>Download Torrent File</button>
             }
         </div>
