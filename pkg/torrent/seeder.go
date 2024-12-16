@@ -2,7 +2,6 @@ package torrent
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -20,7 +19,6 @@ import (
 	"github.com/zeebo/bencode"
 )
 
-const TrackerAddr = "http://127.0.0.1:8080/announce"
 // All the seeder needs to do is respond to requests for specific pieces of a file
 
 // Piece size is set to 512 but we should edit how we do this on this receiver side to accept different piece sized based on peer
@@ -41,10 +39,13 @@ type Leecher struct {
 }
 
 type SeederStack struct {
-	mtx     sync.Mutex
-	seeders []Seeder
-	port    int
+	mtx         sync.Mutex
+	seeders     []Seeder
+	port        int	
 }
+
+// Important Constants
+const TrackerAddr string = "http://20.121.67.21:80/announce"
 
 // Adds Seeder to SeederStack and sends POST request to tracker
 func (s *SeederStack) AddSeeder(seeder Seeder) error {
@@ -57,7 +58,7 @@ func (s *SeederStack) AddSeeder(seeder Seeder) error {
 		InfoHash: seeder.infoHash,
 		PeerID:   seeder.peerID,
 		IP:       strings.Split(seeder.addr.String(), ":")[0], // Only want the IP address
-		Port:     s.port, 
+		Port:     s.port,
 		Event:    trackingserver.STARTED,
 	}
 
@@ -71,26 +72,26 @@ func (s *SeederStack) AddSeeder(seeder Seeder) error {
 	var bencodedAnnounce bytes.Buffer
 	err := bencode.NewEncoder(&bencodedAnnounce).Encode(announce)
 	if err != nil {
-		return errors.New("error encoding announce")
+		return err
 	}
-
+		
 	response, err := http.Post(TrackerAddr, "application/x-bittorrent", &bencodedAnnounce)
 	if err != nil {
-		return errors.New("error sending POST request to tracker")
+		return err
 	}
 	defer response.Body.Close()
 
 	// Read the response body to bytes
 	responseBytes, err := io.ReadAll(response.Body)
 	if err != nil {
-		return errors.New("error reading response body")
+		return err
 	}
 
 	// Decode the response
 	var decodedResponse map[string]interface{}
 	err = bencode.NewDecoder(bytes.NewReader(responseBytes)).Decode(&decodedResponse)
 	if err != nil {
-		return errors.New("error decoding response")
+		return err
 	}
 
 	fmt.Println("Decoded response:", decodedResponse)
@@ -124,7 +125,7 @@ func (s *SeederStack) Listen(startPort int, maxRetries int) {
 		log.Fatalf("Error: Unable to bind to any port after %d retries: %v", maxRetries, err)
 		return
 	}
-	
+
 	s.mtx.Lock()
 	s.port = currentPort
 	s.mtx.Unlock()
@@ -168,7 +169,7 @@ func (hm *HandshakeMessage) Marshal() ([]byte, error) {
 
 	copy(buf[28:], hm.InfoHash[:])
 	copy(buf[48:], hm.PeerID[:])
-	
+
 	return buf, nil
 }
 
@@ -243,7 +244,7 @@ func (s *SeederStack) handleConn(leecher Leecher) {
 	for {
 		buf := make([]byte, 5)
 		leecher.tcpConn.Read(buf)
-		
+
 		length := uint32(buf[0])<<24 | uint32(buf[1])<<16 | uint32(buf[2])<<8 | uint32(buf[3])
 		buf2 := make([]byte, length)
 		leecher.tcpConn.Read(buf2)
@@ -281,7 +282,7 @@ const (
 	Unchoke       int8 = 1
 	Interested    int8 = 2
 	NotInterested int8 = 3
-	Bitfield 	int8 = 5
+	Bitfield      int8 = 5
 	Request       int8 = 6
 	Piece         int8 = 7
 )
@@ -291,7 +292,6 @@ type Message struct {
 	ID      int8
 	Payload []byte
 }
-
 
 func (m *Message) Marshal() ([]byte, error) {
 	// Marshal the message

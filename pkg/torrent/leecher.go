@@ -80,6 +80,8 @@ func downloadFromSeeder(peer trackingserver.Peer, torrent Torrent, bitfield []by
 
 		// Append the piece data
 		downloadedData = append(downloadedData, pieceData...)
+
+		fmt.Println("Pieces downloaded: ", pieceIndex+1, "/", totalPieces)
 	}
 
 	// Write the downloaded data to disk
