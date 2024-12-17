@@ -12,7 +12,7 @@ import (
 	"github.com/zeebo/bencode"
 )
 
-const PIECE_SIZE = 512 * 1024 // 512 KB
+const PIECE_SIZE = 16 * 1024 // 16 KB
 
 func CreateTorrentFile(seederStack *SeederStack, filePath string, peerID string) ([]byte, error) {
 	// Open the file
@@ -29,12 +29,30 @@ func CreateTorrentFile(seederStack *SeederStack, filePath string, peerID string)
 	}
 
 	// Calculate the SHA-1 hash of the file
-	hasher := sha1.New()
-	_, err = io.Copy(hasher, file)
-	if err != nil {
-		return nil, err
+	// Reset the file offset to the beginning
+	file.Seek(0, 0)
+
+	// Prepare to read the file in pieces
+	pieces := make([]byte, 0)
+	buf := make([]byte, PIECE_SIZE)
+
+	for {
+		n, err := file.Read(buf)
+		if err != nil && err != io.EOF {
+			return nil, err
+		}
+		if n == 0 {
+			break
+		}
+
+		// Compute the SHA-1 hash of the current piece
+		hasher := sha1.New()
+		hasher.Write(buf[:n])
+		pieceHash := hasher.Sum(nil)
+
+		// Append the piece hash to the pieces slice
+		pieces = append(pieces, pieceHash...)
 	}
-	pieces := hasher.Sum(nil) // This is a 20-byte hash
 
 	// Normalize the path and extract the file name, Path wasnt working for some reason
 	normalizedPath := strings.ReplaceAll(filePath, "\\", "/")

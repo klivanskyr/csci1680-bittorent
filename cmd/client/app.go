@@ -19,7 +19,7 @@ type App struct {
 func NewApp() *App {
 	// Create a new App	
 	a := App{}
-
+	
 	// start seeder stack
 	a.seederStack = &Torrent.SeederStack{}
 	go a.seederStack.Listen(6881, 10) // Start listening on port 6881 with 10 retries

@@ -6,10 +6,12 @@ import (
 	"crypto/sha1"
 	"encoding/binary"
 	"fmt"
+	"log"
 	"net"
+	"os"
 )
 
-func DownloadFromSeeders(peers []trackingserver.Peer, torrent Torrent, totalPieces uint32) ([]byte, error)  {
+func DownloadFromSeeders(peers []trackingserver.Peer, torrent Torrent, totalPieces uint32) ([]byte, error) {
 	// Make a bitfield to track the pieces that we have
 	bitfield := make([]byte, (totalPieces+7)/8)
 
@@ -53,11 +55,17 @@ func downloadFromSeeder(peer trackingserver.Peer, torrent Torrent, bitfield []by
 	totalPieces := len(torrent.Info.Pieces) / 20 // Each piece hash is 20 bytes
 	downloadedData := make([]byte, 0)
 
-	fmt.Println("Total pieces: ", totalPieces)
+	logf, err := os.OpenFile("Log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+	if err != nil {
+		fmt.Println("error opening file: %v", err)
+	}
+	log.SetOutput(logf)
+
+	log.Println("Total pieces: ", totalPieces)
 	for pieceIndex := 0; pieceIndex < totalPieces; pieceIndex++ {
 		// Check if we already have the piece
 		if hasPiece(bitfield, pieceIndex) {
-			fmt.Println("Already have piece: ", pieceIndex+1, "/", totalPieces)
+			log.Println("Already have piece: ", pieceIndex+1, "/", totalPieces)
 			continue
 		}
 
@@ -73,17 +81,17 @@ func downloadFromSeeder(peer trackingserver.Peer, torrent Torrent, bitfield []by
 			return nil, err
 		}
 
-		fmt.Println("Piece received: ", pieceIndex+1, "/", totalPieces)
-		fmt.Println("Piece data: ", string(pieceData))
+		log.Println("Piece received: ", pieceIndex+1, "/", totalPieces)
+		log.Println("Piece data: ", string(pieceData))
 
 		// Validate the piece data
 		valid, err := validatePiece(torrent, pieceIndex, pieceData)
 		if err != nil || !valid {
-			fmt.Println("Piece failed validation")
+			log.Println("Piece failed validation")
 			return nil, fmt.Errorf("piece %d failed validation", pieceIndex)
 		}
 
-		fmt.Println("Piece validated: ", pieceIndex+1, "/", totalPieces)
+		log.Println("Piece validated: ", pieceIndex+1, "/", totalPieces)
 
 		// Update the bitfield
 		setPiece(bitfield, pieceIndex)
@@ -91,7 +99,7 @@ func downloadFromSeeder(peer trackingserver.Peer, torrent Torrent, bitfield []by
 		// Append the piece data
 		downloadedData = append(downloadedData, pieceData...)
 
-		fmt.Println("Pieces downloaded: ", pieceIndex+1, "/", totalPieces)
+		log.Println("Pieces downloaded: ", pieceIndex+1, "/", totalPieces)
 	}
 
 	// Write the downloaded data to disk

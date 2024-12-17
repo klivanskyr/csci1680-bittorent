@@ -3,6 +3,8 @@ package client
 import (
 	"bittorrent/pkg/torrent"
 	TrackingServer "bittorrent/pkg/trackingserver"
+	"log"
+	"os"
 
 	"bytes"
 	"crypto/rand"
@@ -16,8 +18,7 @@ import (
 )
 
 /*
- THIS FILE SHOULD REALLY BE APART OF LEACHER.GO
-
+THIS FILE SHOULD REALLY BE APART OF LEACHER.GO
 */
 func GeneratePeerID() string {
 	const clientPrefix = "-GO0001-" // Go client
@@ -67,6 +68,11 @@ func URLEncodeBytes(data []byte) string {
 }
 
 func sendHTTPTrackerRequest(peerId string, announce string, infoHash []byte) ([]TrackingServer.Peer, error) {
+	logf, err := os.OpenFile("Log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+	if err != nil {
+		fmt.Println("error opening file: %v", err)
+	}
+
 	// Manually encode each byte of the info_hash
 	encodedInfoHash := URLEncodeBytes(infoHash)
 
@@ -113,6 +119,10 @@ func sendHTTPTrackerRequest(peerId string, announce string, infoHash []byte) ([]
 	if err != nil {
 		return nil, fmt.Errorf("error decoding tracker response: %v", err)
 	}
-	
+
+	// Log the response
+	log.SetOutput(logf)
+	log.Printf("Tracker response: %v\n", trackerResponse.Peers)
+
 	return trackerResponse.Peers, nil
 }
