@@ -1,0 +1,3 @@
+## Bittorrent2
+
+To use, run make run-client in the terminal. Since it only works locally, for testing, you'll want to run it again, so run ./bin/client for the second client. I will keep the server running until January or so, so feel free to test whatever you want! Since the server isn't actually handling any files, it shouldn't cost me much at all!
