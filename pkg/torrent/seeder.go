@@ -39,9 +39,9 @@ type Leecher struct {
 }
 
 type SeederStack struct {
-	mtx         sync.Mutex
-	seeders     []Seeder
-	port        int	
+	mtx     sync.Mutex
+	seeders []Seeder
+	port    int
 }
 
 // Important Constants
@@ -74,7 +74,7 @@ func (s *SeederStack) AddSeeder(seeder Seeder) error {
 	if err != nil {
 		return err
 	}
-		
+
 	response, err := http.Post(TrackerAddr, "application/x-bittorrent", &bencodedAnnounce)
 	if err != nil {
 		return err
@@ -238,7 +238,12 @@ func (s *SeederStack) handleConn(leecher Leecher) {
 		handshake.InfoHash,
 		handshake.PeerID,
 	}
-	leecher.tcpConn.Write([]byte(handshakeResponse.Pstr))
+	handshakeresponseBytes, err := handshakeResponse.Marshal()
+	if err != nil {
+		log.Println("Error marshalling handshake response:", err)
+		return
+	}
+	leecher.tcpConn.Write(handshakeresponseBytes)
 
 	// Now we handle the rest of the messages
 	for {
