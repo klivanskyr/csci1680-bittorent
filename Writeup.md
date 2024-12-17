@@ -50,6 +50,8 @@ Throughout the development of our Bittorrent implementation, we encountered seve
 
 ### Results Achieved
 
+- **Port Forwarding**: Unfortunately, we couldn't get it working with remote IPs because of NAT, so automatic port forwarding would be great to try. Right now, we have our tracker server running remotely, but tracking local IPs and ports, but it would only require sending the remote IP address (as the client) and then implementing port forwarding in the client to make it work. We considered including a manual port forwarding version of this in the demo video, but since IP and TCP were done locally, we were content with leaving it local for now, wanting to implement other things first.  
+
 - **Successful File Transfers**: We were able to demonstrate the complete cycle of uploading and downloading files between peers using our tracker server.
 
 - **Peer Discovery Mechanism**: Implemented a functioning system where peers could discover others sharing the same file and establish direct connections.
