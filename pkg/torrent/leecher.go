@@ -7,73 +7,83 @@ import (
 	"encoding/binary"
 	"fmt"
 	"net"
-	"os"
 )
 
-func DownloadFromSeeders(peers []trackingserver.Peer, torrent Torrent, totalPieces uint32) error {
+func DownloadFromSeeders(peers []trackingserver.Peer, torrent Torrent, totalPieces uint32) ([]byte, error)  {
 	// Make a bitfield to track the pieces that we have
 	bitfield := make([]byte, (totalPieces+7)/8)
 
 	// Iterate through the list of peers, downloading as many pieces from each and moving on if one fails
 	for _, peer := range peers {
-		err := downloadFromSeeder(peer, torrent, bitfield)
+		downloadedData, err := downloadFromSeeder(peer, torrent, bitfield)
 		if err != nil {
 			continue
 		} else {
-			return nil
+			return downloadedData, nil
 		}
 	}
 
-	return fmt.Errorf("failed to download from all seeders")
+	return nil, fmt.Errorf("failed to download from all seeders")
 }
 
-func downloadFromSeeder(peer trackingserver.Peer, torrent Torrent, bitfield []byte) error {
+func downloadFromSeeder(peer trackingserver.Peer, torrent Torrent, bitfield []byte) ([]byte, error) {
 	// Connect to the peer
 	conn, err := net.Dial("tcp", fmt.Sprintf("%s:%d", peer.IP, peer.Port))
 	if err != nil {
-		return fmt.Errorf("failed to connect to peer: %v", err)
+		return nil, fmt.Errorf("failed to connect to peer: %v", err)
 	}
 	defer conn.Close()
 
+	fmt.Println("Connected to seeder")
 	// Send the handshake message
 	err = sendHandshakeToSeeder(conn, torrent, peer.PeerID)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
+	fmt.Println("Handshake sent")
 	// Receive the handshake message
 	err = receiveHandshakeFromSeeder(conn, torrent)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
+	fmt.Println("Handshake received")
 	// Start downloading pieces
 	totalPieces := len(torrent.Info.Pieces) / 20 // Each piece hash is 20 bytes
 	downloadedData := make([]byte, 0)
 
+	fmt.Println("Total pieces: ", totalPieces)
 	for pieceIndex := 0; pieceIndex < totalPieces; pieceIndex++ {
 		// Check if we already have the piece
 		if hasPiece(bitfield, pieceIndex) {
+			fmt.Println("Already have piece: ", pieceIndex+1, "/", totalPieces)
 			continue
 		}
 
 		// Send a request message for the piece
 		err = sendRequest(conn, uint32(pieceIndex))
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		// Receive the piece data
 		pieceData, err := receivePiece(conn)
 		if err != nil {
-			return err
+			return nil, err
 		}
+
+		fmt.Println("Piece received: ", pieceIndex+1, "/", totalPieces)
+		fmt.Println("Piece data: ", string(pieceData))
 
 		// Validate the piece data
 		valid, err := validatePiece(torrent, pieceIndex, pieceData)
 		if err != nil || !valid {
-			return fmt.Errorf("piece %d failed validation", pieceIndex)
+			fmt.Println("Piece failed validation")
+			return nil, fmt.Errorf("piece %d failed validation", pieceIndex)
 		}
+
+		fmt.Println("Piece validated: ", pieceIndex+1, "/", totalPieces)
 
 		// Update the bitfield
 		setPiece(bitfield, pieceIndex)
@@ -85,12 +95,12 @@ func downloadFromSeeder(peer trackingserver.Peer, torrent Torrent, bitfield []by
 	}
 
 	// Write the downloaded data to disk
-	err = os.WriteFile("downloaded_file", downloadedData, 0644)
-	if err != nil {
-		return err
-	}
+	// err = os.WriteFile("downloaded_file", downloadedData, 0644)
+	// if err != nil {
+	// 	return err
+	// }
 
-	return nil
+	return downloadedData, nil
 }
 
 func sendHandshakeToSeeder(conn net.Conn, torrent Torrent, pi string) error {
@@ -146,6 +156,7 @@ func receiveHandshakeFromSeeder(conn net.Conn, torrent Torrent) error {
 }
 
 func sendRequest(conn net.Conn, pieceIndex uint32) error {
+	fmt.Println("PieceIndex:", pieceIndex)
 	// Create the request message
 	message := Message{
 		Length:  13,
@@ -159,6 +170,7 @@ func sendRequest(conn net.Conn, pieceIndex uint32) error {
 	copy(message.Payload[8:12], uint32ToBytes(PIECE_SIZE)) // length
 
 	// Marshal the message
+	fmt.Println("About to send request", message)
 	msgBytes, err := message.Marshal()
 	if err != nil {
 		return fmt.Errorf("failed to marshal request message: %v", err)
@@ -178,6 +190,7 @@ func receivePiece(conn net.Conn) ([]byte, error) {
 	_, err := conn.Read(buf)
 
 	length := binary.BigEndian.Uint32(buf)
+	fmt.Println("Received length:", length)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read message length: %v", err)
 	}
@@ -196,15 +209,13 @@ func receivePiece(conn net.Conn) ([]byte, error) {
 		return nil, fmt.Errorf("failed to unmarshal message: %v", err)
 	}
 
+	fmt.Println("Received message:", message)
+	fmt.Println("Received message bytes:", string(message.Payload))
+
 	// Check the message ID
 	if message.ID != 7 {
 		return nil, fmt.Errorf("unexpected message ID: %d", message.ID)
 	}
-
-	// Check the piece index
-	//pieceIndex := int(binary.BigEndian.Uint32(message.Payload[0:4]))
-
-	// Return the piece data
 
 	return message.Payload[1:], nil
 }
@@ -212,6 +223,9 @@ func receivePiece(conn net.Conn) ([]byte, error) {
 func validatePiece(torrent Torrent, pieceIndex int, pieceData []byte) (bool, error) {
 	// Calculate the SHA-1 hash of the piece data
 	hash := sha1.Sum(pieceData)
+
+	fmt.Println("Hash:", hash)
+	fmt.Println("Expected Hash:", torrent.Info.Pieces[pieceIndex*20:(pieceIndex+1)*20])
 
 	// Get the expected hash from the torrent metadata
 	expectedHash := torrent.Info.Pieces[pieceIndex*20 : (pieceIndex+1)*20]

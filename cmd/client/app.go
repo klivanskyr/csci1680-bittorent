@@ -66,7 +66,7 @@ func (a *App) HashInfo(torrent Torrent.Torrent) ([]byte, error) {
 	return torrent.HashInfo()
 }
 
-func (a *App) DownloadFromSeeders(peers []trackingserver.Peer, torrent Torrent.Torrent, totalPieces uint32) error {
+func (a *App) DownloadFromSeeders(peers []trackingserver.Peer, torrent Torrent.Torrent, totalPieces uint32) ([]byte, error) {
 	return Torrent.DownloadFromSeeders(peers, torrent, totalPieces)
 }
 

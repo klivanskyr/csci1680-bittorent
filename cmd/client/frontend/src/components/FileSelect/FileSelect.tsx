@@ -19,7 +19,8 @@ type File = {
 }
 
 export default function FileSelect({ tab }: { tab: Tab }) {
-    const [file, setFile] = useState<File | null>(null); // used for uploading
+    const [uploadedFile, setUploadedFile] = useState<File | null>(null); // used for uploading
+    const [downloadedFile, setDownloadedFile] = useState<File | null>(null); // used for downloading
 
     const handleFileSelect = async () => {
         if (tab === "Download") {
@@ -39,26 +40,37 @@ export default function FileSelect({ tab }: { tab: Tab }) {
             console.log("peers:", peers);
 
             // Start downloading file from peers
-            await DownloadFromSeeders(peers, torrent, totalPieces);
+            const downloadedBytes = await DownloadFromSeeders(peers, torrent, totalPieces);
+            setDownloadedFile({ bytes: downloadedBytes, name: torrent.Info.Name });
 
 
         } else if (tab === "Upload" ) { // tab === "upload"
             const file = await SelectAnyFile();
             const torrentBytes = await CreateTorrentFile(file.Path);
-            setFile({ bytes: torrentBytes, name: file.Name });
+            setUploadedFile({ bytes: torrentBytes, name: file.Name });
         }
     }
 
-    const handleDownload = async () => {
-        if (!file) return;
-        await SaveFileFromBytes(file.bytes, file.name, "Torrent Files", "*.torrent"); 
+    const handleDownload = async (tab: Tab) => {
+        if (tab === "Upload") {
+            // Save Torrent File
+            if (!uploadedFile) return;
+            await SaveFileFromBytes(uploadedFile!.bytes, uploadedFile!.name, "Torrent Files", "*.torrent");
+        } else if (tab === "Download") {
+            // Save File
+            if (!downloadedFile) return
+            await SaveFileFromBytes(downloadedFile!.bytes, downloadedFile!.name, "Downloaded Files", "*.*");
+        }
     };
 
     return (
         <div>
-            {(tab === "Download" || !file) && <button className="button-1" onClick={() => handleFileSelect()}>Select File</button>}
-            {(tab === "Upload" && file) &&
-                <button className="button-1 button-download" onClick={() => handleDownload()}>Download Torrent File</button>
+            {((tab === "Download" && !downloadedFile) || (tab === "Upload" && !uploadedFile)) && <button className="button-1" onClick={() => handleFileSelect()}>Select File</button>}
+            {(tab === "Upload" && uploadedFile) &&
+                <button className="button-1 button-download" onClick={() => handleDownload("Upload")}>Download Torrent File</button>
+            }
+            {(tab === "Download" && downloadedFile) && 
+                <button className="button-1 button-download" onClick={() => handleDownload("Download")}>Download File</button>
             }
         </div>
     )

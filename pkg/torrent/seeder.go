@@ -2,6 +2,7 @@ package torrent
 
 import (
 	"bytes"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"log"
@@ -45,7 +46,8 @@ type SeederStack struct {
 }
 
 // Important Constants
-const TrackerAddr string = "http://20.121.67.21:80/announce"
+// const TrackerAddr string = "http://20.121.67.21:80/announce"
+const TrackerAddr string = "http://localhost:8080/announce"
 
 // Adds Seeder to SeederStack and sends POST request to tracker
 func (s *SeederStack) AddSeeder(seeder Seeder) error {
@@ -188,6 +190,7 @@ func UnmarshalHandshake(buf []byte) (*HandshakeMessage, error) {
 
 // First, they exchange a handshake exchanging info_hash and peer_id
 func (s *SeederStack) handleConn(leecher Leecher) {
+	fmt.Println("Handling connection from", leecher.tcpConn.RemoteAddr())
 	// Receive initial handshake
 	buf := make([]byte, 68)
 	leecher.tcpConn.Read(buf)
@@ -213,8 +216,6 @@ func (s *SeederStack) handleConn(leecher Leecher) {
 	}
 
 	s.mtx.Lock()
-	defer s.mtx.Unlock()
-
 	for _, seeder := range s.seeders {
 		if bytes.Equal(seeder.infoHash, handshake.InfoHash[:]) {
 			// Add leecher to seeder's list of connected leechers
@@ -223,7 +224,6 @@ func (s *SeederStack) handleConn(leecher Leecher) {
 			break
 		}
 	}
-
 	s.mtx.Unlock()
 
 	if cseeder.infoHash == nil {
@@ -231,6 +231,10 @@ func (s *SeederStack) handleConn(leecher Leecher) {
 		log.Println("No seeder found for info_hash", handshake.InfoHash)
 		return
 	}
+
+	fmt.Println("Seeder found for info_hash", hex.EncodeToString(handshake.InfoHash[:]))
+
+
 
 	// Send handshake response
 	handshakeResponse := HandshakeMessage{
@@ -243,9 +247,12 @@ func (s *SeederStack) handleConn(leecher Leecher) {
 		log.Println("Error marshalling handshake response:", err)
 		return
 	}
+	fmt.Println("Sending handshake response")
 	leecher.tcpConn.Write(handshakeresponseBytes)
+	fmt.Println("Handshake response sent")
 
 	// Now we handle the rest of the messages
+	var test = 0
 	for {
 		buf := make([]byte, 5)
 		leecher.tcpConn.Read(buf)
@@ -261,6 +268,11 @@ func (s *SeederStack) handleConn(leecher Leecher) {
 		if err != nil {
 			log.Println("Error unmarshalling message:", err)
 			return
+		}	
+
+		if test < 5 {
+			fmt.Println("RECIEVED MESSAGE FROM LEECHER: ", message)
+			test++
 		}
 
 		// Here, we could stretch implement a switch statement to handle different types of messages that are in the actual protocol
@@ -301,11 +313,11 @@ type Message struct {
 func (m *Message) Marshal() ([]byte, error) {
 	// Marshal the message
 	buf := make([]byte, 5+len(m.Payload))
-	buf[0] = byte(m.ID)
-	buf[1] = byte(m.Length >> 24)
-	buf[2] = byte(m.Length >> 16)
-	buf[3] = byte(m.Length >> 8)
-	buf[4] = byte(m.Length)
+	buf[0] = byte(m.Length >> 24)
+	buf[1] = byte(m.Length >> 16)
+	buf[2] = byte(m.Length >> 8)
+	buf[3] = byte(m.Length)
+	buf[4] = byte(m.ID)
 	copy(buf[5:], m.Payload)
 
 	return buf, nil
@@ -314,8 +326,8 @@ func (m *Message) Marshal() ([]byte, error) {
 func UnmarshalMessage(buf []byte) (*Message, error) {
 	// Unmarshal the message
 	m := Message{
-		uint32(buf[1])<<24 | uint32(buf[2])<<16 | uint32(buf[3])<<8 | uint32(buf[4]),
-		int8(buf[0]),
+		uint32(buf[0])<<24 | uint32(buf[1])<<16 | uint32(buf[2])<<8 | uint32(buf[3]),
+		int8(buf[4]),
 		buf[5:],
 	}
 
@@ -341,18 +353,22 @@ func (s *Seeder) sendPiece(pieceIndex int, leecher Leecher) {
 	}
 	// Read the piece
 	buf := make([]byte, PIECE_SIZE)
-	_, err = file.Read(buf)
-	if err != nil {
+	n, err := file.Read(buf) // n is the actual number of bytes read
+	if err != nil && err != io.EOF {
 		log.Println("Error reading file:", err)
 		return
 	}
+	buf = buf[:n] // Trim buf to the actual number of bytes read
 
-	// Create the piece message
+	// Now set the message length correctly
 	message := Message{
-		Length:  uint32(len(buf) + 1),
+		Length:  uint32(n + 2), // 1 byte for the ID + 1 byte for the piece index + n bytes for the piece
 		ID:      7,
 		Payload: append([]byte{byte(pieceIndex)}, buf...),
 	}
+
+	fmt.Println("Sending bytes: ", string(buf))
+	fmt.Println("Sending bytes: ", message)
 
 	// Marshal the message
 	msgBytes, err := message.Marshal()
@@ -362,5 +378,6 @@ func (s *Seeder) sendPiece(pieceIndex int, leecher Leecher) {
 	}
 
 	// Send the piece
+	fmt.Println("Sending piece", pieceIndex)
 	leecher.tcpConn.Write(msgBytes)
 }

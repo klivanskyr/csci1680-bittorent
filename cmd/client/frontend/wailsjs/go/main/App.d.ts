@@ -6,7 +6,7 @@ import {backend} from '../models';
 
 export function CreateTorrentFile(arg1:string):Promise<Array<number>>;
 
-export function DownloadFromSeeders(arg1:Array<trackingserver.Peer>,arg2:torrent.Torrent,arg3:number):Promise<void>;
+export function DownloadFromSeeders(arg1:Array<trackingserver.Peer>,arg2:torrent.Torrent,arg3:number):Promise<Array<number>>;
 
 export function GeneratePeerID():Promise<string>;
 
