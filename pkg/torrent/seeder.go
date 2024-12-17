@@ -46,8 +46,8 @@ type SeederStack struct {
 }
 
 // Important Constants
-// const TrackerAddr string = "http://20.121.67.21:80/announce"
-const TrackerAddr string = "http://localhost:8080/announce"
+const TrackerAddr string = "http://20.121.67.21:80/announce"
+// const TrackerAddr string = "http://localhost:8080/announce"
 
 // Adds Seeder to SeederStack and sends POST request to tracker
 func (s *SeederStack) AddSeeder(seeder Seeder) error {
