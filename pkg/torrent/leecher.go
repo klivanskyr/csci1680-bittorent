@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"log"
 	"net"
-	"os"
 )
 
 func DownloadFromSeeders(peers []trackingserver.Peer, torrent Torrent, totalPieces uint32) ([]byte, error) {
@@ -55,14 +54,8 @@ func downloadFromSeeder(peer trackingserver.Peer, torrent Torrent, bitfield []by
 	totalPieces := len(torrent.Info.Pieces) / 20 // Each piece hash is 20 bytes
 	downloadedData := make([]byte, 0)
 
-	logf, err := os.OpenFile("Log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
-	if err != nil {
-		fmt.Println("error opening file: %v", err)
-	}
-	log.SetOutput(logf)
-
 	log.Println("Total pieces: ", totalPieces)
-	for pieceIndex := 0; pieceIndex < totalPieces; pieceIndex++ {
+	for pieceIndex := uint32(0); pieceIndex < uint32(totalPieces); pieceIndex++ {
 		// Check if we already have the piece
 		if hasPiece(bitfield, pieceIndex) {
 			log.Println("Already have piece: ", pieceIndex+1, "/", totalPieces)
@@ -70,19 +63,24 @@ func downloadFromSeeder(peer trackingserver.Peer, torrent Torrent, bitfield []by
 		}
 
 		// Send a request message for the piece
-		err = sendRequest(conn, uint32(pieceIndex))
+		err = sendRequest(conn, pieceIndex)
 		if err != nil {
 			return nil, err
 		}
 
 		// Receive the piece data
-		pieceData, err := receivePiece(conn)
+		pieceData, pieceIndexR, err := receivePiece(conn)
 		if err != nil {
 			return nil, err
+		} else if pieceIndexR != pieceIndex {
+			log.Println("received piece index %d, expected %d", pieceIndexR, pieceIndex)
+			return nil, fmt.Errorf("received piece index %d, expected %d", pieceIndexR, pieceIndex)
 		}
 
-		log.Println("Piece received: ", pieceIndex+1, "/", totalPieces)
-		log.Println("Piece data: ", string(pieceData))
+		log.Println("Piece received: ", pieceIndex, "/", totalPieces)
+		//log.Println("Piece data: ", string(pieceData))
+
+		log.Println("Piece data length: ", len(pieceData))
 
 		// Validate the piece data
 		valid, err := validatePiece(torrent, pieceIndex, pieceData)
@@ -192,7 +190,7 @@ func sendRequest(conn net.Conn, pieceIndex uint32) error {
 	return nil
 }
 
-func receivePiece(conn net.Conn) ([]byte, error) {
+func receivePiece(conn net.Conn) ([]byte, uint32, error) {
 	// Read the message
 	buf := make([]byte, 4)
 	_, err := conn.Read(buf)
@@ -200,13 +198,13 @@ func receivePiece(conn net.Conn) ([]byte, error) {
 	length := binary.BigEndian.Uint32(buf)
 	fmt.Println("Received length:", length)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read message length: %v", err)
+		return nil, 0, fmt.Errorf("failed to read message length: %v", err)
 	}
 
 	buf2 := make([]byte, length)
 	_, err = conn.Read(buf2)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read message: %v", err)
+		return nil, 0, fmt.Errorf("failed to read message: %v", err)
 	}
 
 	buf = append(buf, buf2...)
@@ -214,7 +212,7 @@ func receivePiece(conn net.Conn) ([]byte, error) {
 	// Unmarshal the message
 	message, err := UnmarshalMessage(buf)
 	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal message: %v", err)
+		return nil, 0, fmt.Errorf("failed to unmarshal message: %v", err)
 	}
 
 	fmt.Println("Received message:", message)
@@ -222,13 +220,16 @@ func receivePiece(conn net.Conn) ([]byte, error) {
 
 	// Check the message ID
 	if message.ID != 7 {
-		return nil, fmt.Errorf("unexpected message ID: %d", message.ID)
+		return nil, 0, fmt.Errorf("unexpected message ID: %d", message.ID)
 	}
 
-	return message.Payload[1:], nil
+	// Get the piece index
+	pieceIndex := uint32(binary.BigEndian.Uint32(message.Payload[0:4]))
+
+	return message.Payload[4:], pieceIndex, nil
 }
 
-func validatePiece(torrent Torrent, pieceIndex int, pieceData []byte) (bool, error) {
+func validatePiece(torrent Torrent, pieceIndex uint32, pieceData []byte) (bool, error) {
 	// Calculate the SHA-1 hash of the piece data
 	hash := sha1.Sum(pieceData)
 
@@ -245,7 +246,7 @@ func validatePiece(torrent Torrent, pieceIndex int, pieceData []byte) (bool, err
 	return true, nil
 }
 
-func setPiece(bitfield []byte, index int) {
+func setPiece(bitfield []byte, index uint32) {
 	byteIndex := index / 8
 	offset := index % 8
 	bitfield[byteIndex] |= 1 << (7 - offset)
@@ -257,7 +258,7 @@ func uint32ToBytes(n uint32) []byte {
 	return b
 }
 
-func hasPiece(bitfield []byte, index int) bool {
+func hasPiece(bitfield []byte, index uint32) bool {
 	byteIndex := index / 8
 	offset := index % 8
 	return bitfield[byteIndex]&(1<<(7-offset)) != 0

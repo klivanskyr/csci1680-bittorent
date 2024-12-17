@@ -286,10 +286,10 @@ func (s *SeederStack) handleConn(leecher Leecher) {
 		} else if message.ID == 6 {
 			// Handle request message
 			// The index is the first 4 bytes of the payload
-			pieceIndex := message.Payload[0]
+			pieceIndex := uint32(message.Payload[0])<<24 | uint32(message.Payload[1])<<16 | uint32(message.Payload[2])<<8 | uint32(message.Payload[3])
 
 			// cseeder.handleRequest(leecher, buf)
-			cseeder.sendPiece(int(pieceIndex), leecher)
+			cseeder.sendPiece(pieceIndex, leecher)
 		}
 	}
 }
@@ -335,12 +335,11 @@ func UnmarshalMessage(buf []byte) (*Message, error) {
 }
 
 // The seeder then responds by providing the pieces requested
-func (s *Seeder) sendPiece(pieceIndex int, leecher Leecher) {
+func (s *Seeder) sendPiece(pieceIndex uint32, leecher Leecher) {
 	// Open the file (we should keep open file and file descriptor in seeder struct)
-	os.Open(s.filepath)
+	file, err := os.Open(s.filepath)
 	// Seek to the correct position
 	offset := int64(pieceIndex * PIECE_SIZE)
-	file, err := os.Open(s.filepath)
 	if err != nil {
 		log.Println("Error opening file:", err)
 		return
@@ -360,11 +359,14 @@ func (s *Seeder) sendPiece(pieceIndex int, leecher Leecher) {
 	}
 	buf = buf[:n] // Trim buf to the actual number of bytes read
 
+	// We convert piece index to 4 bytes
+	pieceIndexBytes := uint32ToBytes(pieceIndex)
+
 	// Now set the message length correctly
 	message := Message{
-		Length:  uint32(n + 2), // 1 byte for the ID + 1 byte for the piece index + n bytes for the piece
+		Length:  uint32(n + 5), // 1 byte for the ID + 4 byte for the piece index + n bytes for the piece
 		ID:      7,
-		Payload: append([]byte{byte(pieceIndex)}, buf...),
+		Payload: append(pieceIndexBytes, buf...),
 	}
 
 	fmt.Println("Sending bytes: ", string(buf))
