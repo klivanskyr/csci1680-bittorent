@@ -4,9 +4,9 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"net/url"
-	"strings"
 	"sync"
 	"time"
 
@@ -75,7 +75,10 @@ func (tracker *Tracker) GetPeers() map[string][]Peer {
 
 // / Listen is a function that listens for Announce messages from clients.
 func (tracker *Tracker) Listen() {
-	port := "80" //os.Getenv("PORT")
+	port := "8080" // "80" or "8080"
+	// addresses := ":" // ipv4
+	addresses := "[::]:" // ipv6
+
 	http.HandleFunc("/announce", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
@@ -90,7 +93,7 @@ func (tracker *Tracker) Listen() {
 	// Clears the current line
 	log.Print("\r\033[K", "Server Started, Listening on ", port)
 	fmt.Print("> ")
-	log.Fatal(http.ListenAndServe(":"+port, nil))
+	log.Fatal(http.ListenAndServe(addresses+port, nil))
 }
 
 // handleAnnouncePOST handles POST requests to the /announce endpoint.
@@ -105,11 +108,20 @@ func handleAnnouncePOST(w http.ResponseWriter, r *http.Request, tracker *Tracker
 		return
 	}
 
+	// Set IP correctly for IPv6
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		http.Error(w, "Invalid remote address", http.StatusInternalServerError)
+		return
+	}
+
+	fmt.Println("HOST IS: ", host)
+
 	// Convert the AnnounceRequest to an Announce struct
 	announce := Announce{
 		InfoHash: hex.EncodeToString(announceRequest.InfoHash), // Convert InfoHash to hex encoded string
 		PeerID:   string(announceRequest.PeerID),
-		IP:       announceRequest.IP,
+		IP:       host,
 		Port:     announceRequest.Port,
 		Event:    announceRequest.Event,
 	}
@@ -152,9 +164,15 @@ func handleAnnounceGET(w http.ResponseWriter, r *http.Request, tracker *Tracker)
 	// Parse query parameters
 	infoHash := r.URL.Query().Get("info_hash")
 	peerID := r.URL.Query().Get("peer_id")
-	ip := strings.Split(r.RemoteAddr, ":")[0]
 	port := r.URL.Query().Get("port")
 	event := r.URL.Query().Get("event")
+
+	// Get the IPv6 address of the client
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		http.Error(w, "Invalid remote address", http.StatusInternalServerError)
+		return
+	}
 
 	// Validate required fields
 	if infoHash == "" || peerID == "" || port == "" {
@@ -164,7 +182,7 @@ func handleAnnounceGET(w http.ResponseWriter, r *http.Request, tracker *Tracker)
 
 	// Convert port to integer
 	portInt := 0
-	_, err := fmt.Sscanf(port, "%d", &portInt)
+	_, err = fmt.Sscanf(port, "%d", &portInt)
 	if err != nil {
 		http.Error(w, "Invalid port number", http.StatusBadRequest)
 		return
@@ -198,7 +216,7 @@ func handleAnnounceGET(w http.ResponseWriter, r *http.Request, tracker *Tracker)
 	announce := Announce{
 		InfoHash: infoHashHex,
 		PeerID:   peerID,
-		IP:       ip,
+		IP:       host,
 		Port:     portInt,
 		Event:    eventInt,
 	}

@@ -89,8 +89,16 @@ func CreateTorrentFile(seederStack *SeederStack, filePath string, peerID string)
 
 	fmt.Println("Hash Info: ", hashInfo)
 
+	ipv6, err := getGlobalIPv6()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get IPv6 address: %v", err)
+	}
+
+	// Debug IPv6
+	fmt.Println("IPv6: ", ipv6)
+
 	err = seederStack.AddSeeder(Seeder{
-		addr:              &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: seederPort}, //Right now just local host, THIS IS THE SEEDERS IP
+		addr:              &net.TCPAddr{IP: net.ParseIP(ipv6), Port: seederPort},
 		infoHash:          hashInfo,
 		peerID:            []byte(peerID),
 		filepath:          filePath,
@@ -104,4 +112,35 @@ func CreateTorrentFile(seederStack *SeederStack, filePath string, peerID string)
 	}
 
 	return buffer.Bytes(), nil
+}
+
+func getGlobalIPv6() (string, error) {
+	interfaces, err := net.Interfaces()
+	if err != nil {
+		return "", err
+	}
+
+	for _, iface := range interfaces {
+		// Skip down or loopback interfaces
+		if iface.Flags&net.FlagUp == 0 || iface.Flags&net.FlagLoopback != 0 {
+			continue
+		}
+
+		addrs, err := iface.Addrs()
+		if err != nil {
+			continue
+		}
+
+		for _, addr := range addrs {
+			if ipNet, ok := addr.(*net.IPNet); ok {
+				ip := ipNet.IP
+				// Check if it's a global IPv6 address (not link-local, not loopback)
+				if ip.To4() == nil && !ip.IsLoopback() && !ip.IsLinkLocalUnicast() {
+					return ip.String(), nil
+				}
+			}
+		}
+	}
+
+	return "", fmt.Errorf("no global IPv6 address found")
 }

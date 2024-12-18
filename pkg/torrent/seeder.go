@@ -10,9 +10,6 @@ import (
 	"net/http"
 	"os"
 	"strconv"
-	"strings"
-
-	// "strings"
 	"sync"
 
 	"bittorrent/pkg/trackingserver"
@@ -46,8 +43,9 @@ type SeederStack struct {
 }
 
 // Important Constants
-const TrackerAddr string = "http://20.121.67.21:80/announce"
+// const TrackerAddr string = "http://20.121.67.21:80/announce"
 // const TrackerAddr string = "http://localhost:8080/announce"
+const TrackerAddr string = "http://[fd95:13b9:7f7:7322:c26c:53d:5bc7:5487]:8080/announce" // My localhost IPv6 address
 
 // Adds Seeder to SeederStack and sends POST request to tracker
 func (s *SeederStack) AddSeeder(seeder Seeder) error {
@@ -55,11 +53,17 @@ func (s *SeederStack) AddSeeder(seeder Seeder) error {
 	s.seeders = append(s.seeders, seeder)
 	s.mtx.Unlock()
 
+	// Get ipv6 address
+	host, _, err := net.SplitHostPort(seeder.addr.String())
+	if err != nil {
+		return fmt.Errorf("failed to parse seeder address: %v", err)
+	}
+
 	// Send a request to the tracker to announce the seeder
 	announce := trackingserver.AnnounceRequest{
 		InfoHash: seeder.infoHash,
 		PeerID:   seeder.peerID,
-		IP:       strings.Split(seeder.addr.String(), ":")[0], // Only want the IP address
+		IP:       host,
 		Port:     s.port,
 		Event:    trackingserver.STARTED,
 	}
@@ -72,7 +76,7 @@ func (s *SeederStack) AddSeeder(seeder Seeder) error {
 	// fmt.Println("Event: ", announce.Event)
 
 	var bencodedAnnounce bytes.Buffer
-	err := bencode.NewEncoder(&bencodedAnnounce).Encode(announce)
+	err = bencode.NewEncoder(&bencodedAnnounce).Encode(announce)
 	if err != nil {
 		return err
 	}
@@ -112,7 +116,7 @@ func (s *SeederStack) Listen(startPort int, maxRetries int) {
 	// Retry listening on consecutive ports until maxRetries is reached
 	for i := 0; i < maxRetries; i++ {
 		portStr := strconv.Itoa(currentPort)
-		listener, err = net.Listen("tcp", ":"+portStr)
+		listener, err = net.Listen("tcp", "[::]:"+portStr) // Supports IPv6
 		if err == nil {
 			log.Printf("Listening on port %d", currentPort)
 			break

@@ -29,7 +29,8 @@ func DownloadFromSeeders(peers []trackingserver.Peer, torrent Torrent, totalPiec
 
 func downloadFromSeeder(peer trackingserver.Peer, torrent Torrent, bitfield []byte) ([]byte, error) {
 	// Connect to the peer
-	conn, err := net.Dial("tcp", fmt.Sprintf("%s:%d", peer.IP, peer.Port))
+	fmt.Printf("Attempting to connect to seeder at [%s]:%d\n", peer.IP, peer.Port)
+	conn, err := net.Dial("tcp", fmt.Sprintf("[%s]:%d", peer.IP, peer.Port))
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to peer: %v", err)
 	}
